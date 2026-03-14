@@ -1,0 +1,166 @@
+<!--
+  Sync Impact Report
+  ==================================================
+  Version change: 0.0.0 → 1.0.0
+  Modified principles: N/A (initial creation)
+  Added sections:
+    - I. Code Quality (NON-NEGOTIABLE)
+    - II. Test-Driven Development (NON-NEGOTIABLE)
+    - III. User Experience Consistency
+    - IV. Performance Requirements
+    - V. Atomic Commits & Compliance (NON-NEGOTIABLE)
+    - VI. Phased Development
+    - Additional Constraints
+    - Development Workflow & Quality Gates
+    - Governance
+  Removed sections: None
+  Templates requiring updates:
+    - .specify/templates/plan-template.md ✅ no change needed
+    - .specify/templates/spec-template.md ✅ no change needed
+    - .specify/templates/tasks-template.md ✅ no change needed
+    - .specify/templates/checklist-template.md ✅ no change needed
+    - .specify/templates/agent-file-template.md ✅ no change needed
+  Follow-up TODOs: None
+  ==================================================
+-->
+
+# turnovercal Constitution
+
+## Core Principles
+
+### I. Code Quality (NON-NEGOTIABLE)
+
+- All source code MUST pass configured linting and static analysis
+  checks (ruff, mypy, interrogate) with zero errors or warnings.
+- Every function and class MUST include a docstring that describes its
+  purpose, parameters, return values, and raised exceptions.
+- Type annotations MUST be present on all public function signatures.
+- Code complexity MUST remain low; functions MUST NOT exceed a
+  cyclomatic complexity of 10 (ruff rule C901). This limit MUST
+  be enforced in the project's ruff configuration once created.
+- All new source files MUST include SPDX license headers as defined
+  in `REUSE.toml`. Files missing headers MUST NOT be committed.
+
+### II. Test-Driven Development (NON-NEGOTIABLE)
+
+- **Code-level TDD is mandatory.** Every unit of production code
+  MUST be preceded by a failing test that defines the desired
+  behavior. The Red-Green-Refactor cycle is strictly enforced:
+  1. Write a failing test that defines the desired behavior.
+  2. Implement the minimum code required to make the test pass.
+  3. Refactor while keeping all tests green.
+- **Phase-level test planning is incremental.** Not every test
+  category (integration, end-to-end, performance) for a phase
+  MUST be written before that phase begins. Higher-level tests
+  that span multiple stories or depend on infrastructure from
+  later phases MAY be deferred to the phase where their
+  prerequisites exist. Unit-level TDD (the red-green-refactor
+  cycle above) MUST NOT be deferred under any circumstance.
+- CI tests MUST pass before any manual or exploratory testing is
+  performed. Manual testing without green CI is prohibited.
+- Test coverage MUST be maintained or increased with every change;
+  coverage regressions MUST be justified and approved.
+
+### III. User Experience Consistency
+
+- The iCal feed output MUST conform to RFC 5545 (iCalendar)
+  so that any standards-compliant calendar client can consume it.
+- Error messages MUST be actionable: they MUST describe what went
+  wrong and suggest corrective steps where feasible.
+- Breaking changes to the feed URL scheme, event structure, or
+  configuration options MUST be documented, versioned, and
+  communicated before release.
+- Configuration surfaces MUST use sensible defaults so that minimal
+  setup is required for common use cases (e.g., a single Rental
+  Control integration producing a turnover calendar with no
+  additional configuration beyond enabling the component).
+
+### IV. Performance Requirements
+
+- Calendar feed generation MUST complete within a defined response
+  time threshold documented in the feature spec; slow responses
+  degrade the experience for polling calendar clients.
+- Regressions against established benchmarks MUST block merge until
+  resolved or explicitly justified.
+- Resource consumption (memory, CPU, I/O) MUST be considered during
+  design; the integration MUST NOT impose measurable overhead on
+  the Home Assistant event loop during normal operation.
+- Asynchronous operations MUST NOT block the Home Assistant event
+  loop; blocking calls MUST be offloaded to executor threads.
+
+### V. Atomic Commits & Compliance (NON-NEGOTIABLE)
+
+- Every commit MUST represent exactly one logical change (one feature,
+  one fix, or one refactor).
+- Any commit that introduces new files MUST include SPDX license
+  headers for those files. Every commit MUST carry a DCO sign-off
+  (`git commit -s`).
+- Pre-commit hooks MUST pass on every commit. Bypassing hooks with
+  `--no-verify` is **PROHIBITED** under all circumstances.
+- Commit messages MUST follow Conventional Commits with capitalized
+  types as defined in `AGENTS.md`.
+
+### VI. Phased Development
+
+- Development MUST proceed in defined phases; each phase delivers an
+  independently testable increment of functionality.
+- Tests for a phase MUST be written during that phase or a later
+  phase, not all up front. This allows requirements to stabilize
+  before tests are locked in.
+- Each phase MUST conclude with a checkpoint where all CI tests pass
+  and the increment is validated before the next phase begins.
+- Phase boundaries MUST be documented in the implementation plan
+  (`plan.md`) and task list (`tasks.md`).
+
+## Additional Constraints
+
+- **Language & Runtime**: Python 3.x with full type annotation
+  coverage enforced by mypy.
+- **Dependency Management**: Dependencies MUST be managed via `uv`
+  with a locked dependency file (`uv.lock`) committed to the
+  repository.
+- **License Compliance**: The project follows the REUSE specification.
+  Every file MUST be covered by an SPDX header or an entry in
+  `REUSE.toml`.
+- **Security**: Secrets MUST NOT be committed to source control.
+  Credentials MUST be injected via environment variables or secret
+  management tooling.
+- **Home Assistant Compatibility**: The integration MUST follow Home
+  Assistant's custom component conventions and remain compatible
+  with the targeted minimum HA version specified in `hacs.json`
+  or `manifest.json`.
+- **Standards Compliance**: iCal output MUST conform to RFC 5545.
+  VEVENT properties (DTSTART, DTEND, SUMMARY, UID) MUST be
+  present and correctly formatted on every exported event.
+
+## Development Workflow & Quality Gates
+
+1. **Write tests** for the current phase or story (TDD red phase).
+2. **Implement** the minimum code to pass those tests (TDD green).
+3. **Refactor** while keeping all tests green.
+4. **Run linting & type checks** locally (`ruff`, `mypy`).
+5. **Stage and commit** atomically with sign-off and SPDX headers.
+6. **Pre-commit hooks** run automatically — fix any failures and
+   re-commit (do NOT reset; do NOT bypass).
+7. **CI pipeline** MUST pass. No manual or exploratory testing is
+   permitted until CI is green.
+8. **Manual validation** may proceed only after CI confirms all
+   automated checks pass.
+
+## Governance
+
+- This constitution supersedes all other development practices. In
+  case of conflict, this document prevails.
+- Amendments MUST be documented with a version bump, rationale, and
+  migration plan if existing code is affected.
+- Version increments follow semantic versioning:
+  - **MAJOR**: Backward-incompatible principle removals or
+    redefinitions.
+  - **MINOR**: New principles or materially expanded guidance.
+  - **PATCH**: Clarifications, wording, or non-semantic refinements.
+- All pull requests and code reviews MUST verify compliance with
+  these principles. Non-compliance MUST block merge.
+- Use `AGENTS.md` for runtime development guidance that supplements
+  this constitution.
+
+**Version**: 1.0.0 | **Ratified**: 2026-03-14 | **Last Amended**: 2026-03-14
