@@ -200,7 +200,11 @@ event, and verifying the turnover event end time is adjusted.
   integration options flow.
 - **FR-004**: The iCal feed MUST conform to RFC 5545 and be
   consumable by any standards-compliant calendar client
-  (Google Calendar, Apple Calendar, Outlook, etc.).
+  (Google Calendar, Apple Calendar, Outlook, etc.). Event
+  times MUST be encoded using the local timezone configured
+  in Home Assistant with a VTIMEZONE component included in
+  the calendar to ensure correct interpretation across
+  clients and time zones.
 - **FR-005**: TurnoverCal MUST cache generated turnover events
   to retain them after the source guest events are removed from
   Rental Control by the STR platform.
@@ -226,9 +230,9 @@ event, and verifying the turnover event end time is adjusted.
   Control (time changes, cancellations). Each turnover event
   MUST have a stable, deterministic UID preserved across
   recalculations and Keymaster adjustments, to prevent calendar
-  clients from showing duplicates. The UID derivation MUST NOT
-  expose sensitive or correlatable source identifiers from guest
-  events.
+  clients from showing duplicates. The UID MUST be derived
+  using a one-way transformation so that source guest event
+  identifiers cannot be recovered or correlated from the UID.
 - **FR-011**: TurnoverCal MUST handle the case where no gap
   exists between guests (zero-duration turnover) by creating
   an event with a minimal duration (1 minute) to ensure
