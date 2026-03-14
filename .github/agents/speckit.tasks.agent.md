@@ -131,7 +131,7 @@ The tasks.md should be immediately executable - each task must be specific enoug
 
 **CRITICAL**: Tasks MUST be organized by user story to enable independent implementation and testing.
 
-**Tests are OPTIONAL**: Only generate test tasks if explicitly requested in the feature specification or if user requests TDD approach.
+**Unit tests are REQUIRED**: The project constitution mandates code-level TDD. Every user story phase MUST include unit test tasks that are written before implementation (Red-Green-Refactor). Higher-level tests (integration, end-to-end, performance) are OPTIONAL and MAY be deferred to the phase where their prerequisites exist.
 
 ### Checklist Format (REQUIRED)
 

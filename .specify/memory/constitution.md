@@ -17,9 +17,11 @@
   Templates requiring updates:
     - .specify/templates/plan-template.md ✅ no change needed
     - .specify/templates/spec-template.md ✅ no change needed
-    - .specify/templates/tasks-template.md ✅ no change needed
+    - .specify/templates/tasks-template.md ✅ updated (TDD requirement)
     - .specify/templates/checklist-template.md ✅ no change needed
     - .specify/templates/agent-file-template.md ✅ no change needed
+  Agents requiring updates:
+    - .github/agents/speckit.tasks.agent.md ✅ updated (TDD requirement)
   Follow-up TODOs: None
   ==================================================
 -->
