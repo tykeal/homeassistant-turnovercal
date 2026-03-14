@@ -197,7 +197,9 @@ event, and verifying the turnover event end time is adjusted.
   path MAY include a user-configurable prefix, but overrides
   MUST NOT remove or reduce the entropy of the token portion.
   The token MUST be revocable and regenerable through the
-  integration options flow.
+  integration options flow. The token MUST be treated as
+  sensitive and redacted from logs, diagnostics, and error
+  reports.
 - **FR-004**: The iCal feed MUST conform to RFC 5545 and be
   consumable by any standards-compliant calendar client
   (Google Calendar, Apple Calendar, Outlook, etc.). Event
@@ -295,8 +297,10 @@ event, and verifying the turnover event end time is adjusted.
   by at least 3 major calendar clients (Google Calendar, Apple
   Calendar, Microsoft Outlook).
 - **SC-004**: When a Keymaster unlock event occurs during a
-  turnover window, the feed reflects the adjusted end time
-  within 1 minute of the event.
+  turnover window, the feed reflects the adjusted DTEND
+  within 1 minute of the unlock event occurring. The adjusted
+  DTEND represents the completion date (not the exact unlock
+  time) per FR-009.
 - **SC-005**: The iCal feed is accessible without interactive
   authentication from any network client that possesses the
   secret URL token and can reach the Home Assistant instance.
