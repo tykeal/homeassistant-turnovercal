@@ -32,7 +32,8 @@ SPDX-License-Identifier: Apache-2.0
 ## Consistency
 
 - [x] RFC 5545 compliance referenced in FR-004 aligns with
-      constitution Principle 3 (UX Consistency)
+      constitution section III "User Experience Consistency"
+      (see .specify/memory/constitution.md)
 - [x] Configurable retention period (FR-006) has a specified
       default (6 weeks)
 - [x] Lock monitoring (FR-008/FR-009) is conditional on
@@ -61,4 +62,5 @@ SPDX-License-Identifier: Apache-2.0
       user-configurable override
 - [x] FR-009 end-time adjustment: uses next-guest check-in
       time if check-in is same calendar day (local timezone) as
-      unlock; otherwise end-of-day (23:59) on the unlock day
+      unlock; otherwise start of next day (00:00) as
+      non-inclusive DTEND per RFC 5545

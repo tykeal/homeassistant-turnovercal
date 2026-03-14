@@ -100,8 +100,8 @@ configured retention period.
 A property manager has a Keymaster-managed lock integrated with
 Rental Control. When the cleaning staff unlocks the door using a
 designated code during a multi-day turnover window, TurnoverCal
-automatically adjusts the turnover event end time to end-of-day
-on the unlock date, reflecting that the property is ready earlier
+automatically adjusts the turnover event end time to the end of
+the unlock date, reflecting that the property is ready earlier
 than the original checkout-to-check-in window. If the next guest
 check-in is on the same calendar day as the unlock, no adjustment
 is made since the original end time already reflects that day.
@@ -123,8 +123,8 @@ event, and verifying the turnover event end time is adjusted.
    March 12 at 15:00 with a Keymaster lock configured, **When**
    the cleaning staff unlock event occurs on March 10 at 14:30,
    **Then** the turnover event end time is recalculated to
-   March 10 at 23:59 (end-of-day on the unlock date, since the
-   next guest check-in is on a different day).
+   March 11 at 00:00 (start of next day after the unlock date,
+   since the next guest check-in is on a different day).
 2. **Given** a turnover event with a Keymaster lock configured,
    **When** no unlock event occurs during the turnover window,
    **Then** the turnover event retains its original end time
@@ -143,11 +143,12 @@ event, and verifying the turnover event end time is adjusted.
 
 ### Edge Cases
 
-- What happens when two guest events overlap (checkout and
-  check-in at the same time)? The turnover event MUST use a
-  minimal duration (1 minute) rather than zero length to ensure
-  visibility across all calendar clients, signaling that no
-  meaningful cleaning gap exists.
+- What happens when two consecutive guest events have the same
+  checkout and check-in time (back-to-back guests with no gap)?
+  The turnover event MUST use a minimal duration (1 minute)
+  rather than zero length to ensure visibility across all
+  calendar clients, signaling that no meaningful cleaning gap
+  exists.
 - What happens when Rental Control is unavailable or returns
   errors? TurnoverCal MUST continue serving the cached iCal
   feed with the most recent known data and log the error.
@@ -166,8 +167,8 @@ event, and verifying the turnover event end time is adjusted.
 - What happens when the Keymaster unlock event occurs at 23:58
   and the next guest check-in is at 00:15 the following day?
   "Same day" is determined by calendar date in local timezone,
-  so these are different days and the end time is set to 23:59
-  on the unlock day.
+  so these are different days and the end time is set to 00:00
+  the following day (non-inclusive DTEND per RFC 5545).
 - What happens when a guest event is modified in Rental Control
   (check-in/checkout time changes)? The corresponding turnover
   event MUST be recalculated to reflect the updated times.
@@ -184,8 +185,11 @@ event, and verifying the turnover event end time is adjusted.
   the end time is the check-in time of the arriving guest.
 - **FR-003**: TurnoverCal MUST expose a publicly accessible iCal
   feed URL that requires no authentication to access. The URL
-  MUST be auto-generated based on the instance identifier, with
-  an optional user-configurable path override.
+  MUST use a high-entropy, unguessable token to prevent URL
+  guessing. The URL MUST be auto-generated based on the instance
+  identifier, with an optional user-configurable path override.
+  The token MUST be revocable and regenerable through the
+  integration options flow.
 - **FR-004**: The iCal feed MUST conform to RFC 5545 and be
   consumable by any standards-compliant calendar client
   (Google Calendar, Apple Calendar, Outlook, etc.).
@@ -206,8 +210,9 @@ event, and verifying the turnover event end time is adjusted.
   date in the Home Assistant configured local timezone. If the
   next guest check-in falls on the same calendar day as the
   unlock event, the end time remains the original check-in time.
-  Otherwise, the end time is set to end-of-day (23:59 local
-  time) on the day the unlock occurred.
+  Otherwise, the end time is set to the start of the next
+  calendar day (00:00 local time) following the unlock day,
+  used as the non-inclusive DTEND per RFC 5545 semantics.
 - **FR-010**: TurnoverCal MUST update existing turnover events
   when the underlying guest events are modified in Rental
   Control (time changes, cancellations).
@@ -222,7 +227,8 @@ event, and verifying the turnover event end time is adjusted.
   when Rental Control is temporarily unavailable.
 - **FR-014**: Each turnover event in the iCal feed MUST include
   a meaningful summary identifying the property and turnover
-  period.
+  period. Summaries MUST NOT include sensitive guest information
+  since the feed is publicly accessible.
 - **FR-015**: TurnoverCal MUST be configurable through the
   standard Home Assistant integration setup flow.
 
