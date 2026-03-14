@@ -201,7 +201,7 @@ resolve_template() {
         if [ -f "$registry_file" ] && command -v python3 >/dev/null 2>&1; then
             # Read preset IDs sorted by priority (lower number = higher precedence)
             local sorted_presets
-            sorted_presets=$(SPECKIT_REGISTRY="$registry_file" python3 2>/dev/null <<'PYEOF'
+            sorted_presets=$(SPECKIT_REGISTRY="$registry_file" python3 2>/dev/null <<'PYEOF' || true
 import json, sys, os
 try:
     with open(os.environ['SPECKIT_REGISTRY']) as f:
@@ -213,7 +213,7 @@ except Exception:
     sys.exit(1)
 PYEOF
 )
-            if [ $? -eq 0 ] && [ -n "$sorted_presets" ]; then
+            if [ -n "$sorted_presets" ]; then
                 while IFS= read -r preset_id; do
                     local candidate="$presets_dir/$preset_id/templates/${template_name}.md"
                     [ -f "$candidate" ] && echo "$candidate" && return 0

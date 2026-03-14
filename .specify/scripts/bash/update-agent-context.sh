@@ -243,6 +243,12 @@ format_technology_stack() {
 # Template and Content Generation Functions
 #==============================================================================
 
+# Escape a string for use in a sed replacement expression.
+# Handles backslash, ampersand, and the pipe delimiter.
+sed_escape_replacement() {
+    printf '%s\n' "$1" | sed 's/\\/\\\\/g; s/[&|]/\\&/g'
+}
+
 get_project_structure() {
     local project_type
     project_type=$(echo "$1" | tr '[:upper:]' '[:lower:]')
@@ -312,15 +318,19 @@ create_new_agent_file() {
     local language_conventions
     language_conventions=$(get_language_conventions "$NEW_LANG")
 
-    # Perform substitutions with error checking using safer approach
-    # Escape special characters for sed replacement context:
-    # backslash first, then & and the delimiter |
-    local escaped_lang
-    escaped_lang=$(printf '%s\n' "$NEW_LANG" | sed 's/\\/\\\\/g; s/[&|]/\\&/g')
-    local escaped_framework
-    escaped_framework=$(printf '%s\n' "$NEW_FRAMEWORK" | sed 's/\\/\\\\/g; s/[&|]/\\&/g')
-    local escaped_branch
-    escaped_branch=$(printf '%s\n' "$CURRENT_BRANCH" | sed 's/\\/\\\\/g; s/[&|]/\\&/g')
+    # Escape all values for sed replacement context
+    local escaped_lang escaped_framework escaped_branch
+    escaped_lang=$(sed_escape_replacement "$NEW_LANG")
+    escaped_framework=$(sed_escape_replacement "$NEW_FRAMEWORK")
+    escaped_branch=$(sed_escape_replacement "$CURRENT_BRANCH")
+
+    local escaped_project_name escaped_date escaped_structure
+    local escaped_commands escaped_conventions
+    escaped_project_name=$(sed_escape_replacement "$project_name")
+    escaped_date=$(sed_escape_replacement "$current_date")
+    escaped_structure=$(sed_escape_replacement "$project_structure")
+    escaped_commands=$(sed_escape_replacement "$commands")
+    escaped_conventions=$(sed_escape_replacement "$language_conventions")
 
     # Build technology stack and recent change strings conditionally
     local tech_stack
@@ -346,12 +356,12 @@ create_new_agent_file() {
     fi
 
     local substitutions=(
-        "s|\[PROJECT NAME\]|$project_name|"
-        "s|\[DATE\]|$current_date|"
+        "s|\[PROJECT NAME\]|$escaped_project_name|"
+        "s|\[DATE\]|$escaped_date|"
         "s|\[EXTRACTED FROM ALL PLAN.MD FILES\]|$tech_stack|"
-        "s|\[ACTUAL STRUCTURE FROM PLANS\]|$project_structure|g"
-        "s|\[ONLY COMMANDS FOR ACTIVE TECHNOLOGIES\]|$commands|"
-        "s|\[LANGUAGE-SPECIFIC, ONLY FOR LANGUAGES IN USE\]|$language_conventions|"
+        "s|\[ACTUAL STRUCTURE FROM PLANS\]|$escaped_structure|g"
+        "s|\[ONLY COMMANDS FOR ACTIVE TECHNOLOGIES\]|$escaped_commands|"
+        "s|\[LANGUAGE-SPECIFIC, ONLY FOR LANGUAGES IN USE\]|$escaped_conventions|"
         "s|\[LAST 3 FEATURES AND WHAT THEY ADDED\]|$recent_change|"
     )
 
@@ -363,9 +373,13 @@ create_new_agent_file() {
         fi
     done
 
-    # Convert \n sequences to actual newlines using tr-based approach
-    # to avoid sed parsing issues with embedded newlines
-    sed -i.bak2 's/\\n/\n/g' "$temp_file"
+    # Convert \n sequences to actual newlines portably
+    # (GNU sed supports \n in replacement, BSD sed does not)
+    if sed --version >/dev/null 2>&1; then
+        sed -i.bak2 's/\\n/\n/g' "$temp_file"
+    else
+        perl -pi -e 's/\\n/\n/g' "$temp_file"
+    fi
 
     # Clean up backup files
     rm -f "$temp_file.bak" "$temp_file.bak2"
@@ -468,8 +482,8 @@ update_existing_agent_file() {
         # Handle Recent Changes section
         if [[ "$line" == "## Recent Changes" ]]; then
             echo "$line" >> "$temp_file"
-            # Add new change entry right after the heading
-            if [[ -n "$new_change_entry" ]]; then
+            # Add new change entry right after the heading (skip if already present)
+            if [[ -n "$new_change_entry" ]] && ! grep -Fq -- "$new_change_entry" "$target_file"; then
                 echo "$new_change_entry" >> "$temp_file"
             fi
             in_changes_section=true
