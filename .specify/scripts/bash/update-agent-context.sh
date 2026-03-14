@@ -123,8 +123,10 @@ cleanup() {
     exit $exit_code
 }
 
-# Set up cleanup trap
-trap cleanup EXIT INT TERM
+# Use separate traps so signals get appropriate exit codes
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 #==============================================================================
 # Validation Functions
