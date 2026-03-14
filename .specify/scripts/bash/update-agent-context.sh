@@ -244,7 +244,8 @@ format_technology_stack() {
 #==============================================================================
 
 get_project_structure() {
-    local project_type="$1"
+    local project_type
+    project_type=$(echo "$1" | tr '[:upper:]' '[:lower:]')
 
     if [[ "$project_type" == *"web"* ]]; then
         echo "backend/\\nfrontend/\\ntests/"
@@ -254,20 +255,21 @@ get_project_structure() {
 }
 
 get_commands_for_language() {
-    local lang="$1"
+    local lang
+    lang=$(echo "$1" | tr '[:upper:]' '[:lower:]')
 
     case "$lang" in
-        *"Python"*)
-            echo "cd src && pytest && ruff check ."
+        *"python"*)
+            echo "pytest && ruff check ."
             ;;
-        *"Rust"*)
+        *"rust"*)
             echo "cargo test && cargo clippy"
             ;;
-        *"JavaScript"*|*"TypeScript"*)
+        *"javascript"*|*"typescript"*)
             echo "npm test \\&\\& npm run lint"
             ;;
         *)
-            echo "# Add commands for $lang"
+            echo "# Add commands for $1"
             ;;
     esac
 }
@@ -361,9 +363,9 @@ create_new_agent_file() {
         fi
     done
 
-    # Convert \n sequences to actual newlines
-    newline=$(printf '\n')
-    sed -i.bak2 "s/\\\\n/${newline}/g" "$temp_file"
+    # Convert \n sequences to actual newlines using tr-based approach
+    # to avoid sed parsing issues with embedded newlines
+    sed -i.bak2 's/\\n/\n/g' "$temp_file"
 
     # Clean up backup files
     rm -f "$temp_file.bak" "$temp_file.bak2"
