@@ -24,7 +24,7 @@
   ==================================================
 -->
 
-# turnovercal Constitution
+# TurnoverCal Constitution
 
 ## Core Principles
 
