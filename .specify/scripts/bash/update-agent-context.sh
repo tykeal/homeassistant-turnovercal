@@ -113,13 +113,15 @@ log_warning() {
     echo "WARNING: $1" >&2
 }
 
+# Temp file prefix for cleanup tracking
+TEMP_PREFIX="/tmp/agent_update_${$}_"
+
 # Cleanup function for temporary files
 cleanup() {
     local exit_code=$?
     # Disarm traps to prevent re-entrant loop
     trap - EXIT INT TERM
-    rm -f /tmp/agent_update_*_$$
-    rm -f /tmp/manual_additions_$$
+    rm -f "${TEMP_PREFIX}"*
     exit $exit_code
 }
 
@@ -395,7 +397,7 @@ with open(sys.argv[1], 'w') as f:
     # Prepend Cursor frontmatter for .mdc files so rules are auto-included
     if [[ "$target_file" == *.mdc ]]; then
         local frontmatter_file
-        frontmatter_file=$(mktemp) || return 1
+        frontmatter_file=$(mktemp "${TEMP_PREFIX}XXXXXX") || return 1
         printf '%s\n' "---" "description: Project Development Guidelines" "globs: [\"**/*\"]" "alwaysApply: true" "---" "" > "$frontmatter_file"
         cat "$temp_file" >> "$frontmatter_file"
         mv "$frontmatter_file" "$temp_file"
@@ -415,7 +417,7 @@ update_existing_agent_file() {
 
     # Use a single temporary file for atomic update
     local temp_file
-    temp_file=$(mktemp) || {
+    temp_file=$(mktemp "${TEMP_PREFIX}XXXXXX") || {
         log_error "Failed to create temporary file"
         return 1
     }
@@ -543,7 +545,7 @@ update_existing_agent_file() {
     if [[ "$target_file" == *.mdc ]]; then
         if ! head -1 "$temp_file" | grep -q '^---'; then
             local frontmatter_file
-            frontmatter_file=$(mktemp) || { rm -f "$temp_file"; return 1; }
+            frontmatter_file=$(mktemp "${TEMP_PREFIX}XXXXXX") || { rm -f "$temp_file"; return 1; }
             printf '%s\n' "---" "description: Project Development Guidelines" "globs: [\"**/*\"]" "alwaysApply: true" "---" "" > "$frontmatter_file"
             cat "$temp_file" >> "$frontmatter_file"
             mv "$frontmatter_file" "$temp_file"
@@ -592,7 +594,7 @@ update_agent_file() {
     if [[ ! -f "$target_file" ]]; then
         # Create new file from template
         local temp_file
-        temp_file=$(mktemp) || {
+        temp_file=$(mktemp "${TEMP_PREFIX}XXXXXX") || {
             log_error "Failed to create temporary file"
             return 1
         }

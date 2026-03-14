@@ -185,7 +185,7 @@ if git rev-parse --show-toplevel >/dev/null 2>&1; then
     REPO_ROOT=$(git rev-parse --show-toplevel)
     HAS_GIT=true
 else
-    REPO_ROOT="$(find_repo_root "$SCRIPT_DIR")"
+    REPO_ROOT="$(find_repo_root "$SCRIPT_DIR" || true)"
     if [ -z "$REPO_ROOT" ]; then
         echo "Error: Could not determine repository root. Please run this script from within the repository." >&2
         exit 1
