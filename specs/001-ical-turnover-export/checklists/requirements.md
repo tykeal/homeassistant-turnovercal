@@ -38,7 +38,7 @@ before proceeding to planning
 
 - [x] RFC 5545 compliance referenced in FR-004 aligns with
       Constitution section III "User Experience Consistency"
-      (see .specify/memory/constitution.md)
+      (see ../../.specify/memory/constitution.md)
 - [x] Configurable retention period (FR-006) has a specified
       default (6 weeks)
 - [x] Lock monitoring (FR-008/FR-009) is conditional on
@@ -68,5 +68,5 @@ before proceeding to planning
 - [x] FR-009 end-time adjustment: uses next-guest check-in
       time if check-in is same calendar day (local timezone) as
       unlock; otherwise DTEND is 00:00 on the day after
-      unlock, extending the window through end of unlock day
-      per RFC 5545 non-inclusive DTEND semantics
+      unlock, extending the window through the end of unlock
+      day per RFC 5545 non-inclusive DTEND semantics

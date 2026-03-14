@@ -49,7 +49,8 @@ event appears between the two guest events.
 3. **Given** TurnoverCal is configured and running, **When** a
    calendar client requests the iCal feed URL, **Then** the
    response is a valid RFC 5545 iCalendar document containing
-   all turnover events, served without requiring authentication.
+   all turnover events, served without requiring interactive
+   authentication or authentication headers.
 4. **Given** no upcoming guest events exist in Rental Control,
    **When** TurnoverCal processes the calendar, **Then** no
    turnover events are generated and the iCal feed returns a
@@ -100,11 +101,13 @@ configured retention period.
 A property manager has a Keymaster-managed lock integrated with
 Rental Control. When the cleaning staff unlocks the door using a
 designated code during a multi-day turnover window, TurnoverCal
-shortens the turnover event to end on the unlock day, reflecting
-that the property is ready earlier than the original
-checkout-to-check-in window. If the next guest check-in is on
-the same calendar day as the unlock, no adjustment is made since
-the original end time already reflects that day.
+shortens the turnover event to cover only the unlock date,
+indicating the property turnover is complete. The unlock signals
+the completion date — DTEND is set to midnight following the
+unlock day so that the event spans the full calendar day on
+which cleaning occurred. If the next guest check-in is on the
+same calendar day as the unlock, no adjustment is made since the
+original end time already reflects that day.
 
 **Why this priority**: This is an enhancement that adds real-time
 accuracy to turnover tracking. It depends on the core turnover
@@ -123,7 +126,7 @@ event, and verifying the turnover event end time is adjusted.
    March 12 at 15:00 with a Keymaster lock configured, **When**
    the cleaning staff unlock event occurs on March 10 at 14:30,
    **Then** DTEND is set to March 11 at 00:00, representing the
-   turnover window extending through end of March 10 (since the
+   turnover window extending through the end of March 10 (since the
    next guest check-in is on a different day).
 2. **Given** a turnover event with a Keymaster lock configured,
    **When** no unlock event occurs during the turnover window,
@@ -222,10 +225,11 @@ event, and verifying the turnover event end time is adjusted.
 - **FR-010**: TurnoverCal MUST update existing turnover events
   when the underlying guest events are modified in Rental
   Control (time changes, cancellations). Each turnover event
-  MUST have a stable, deterministic UID derived from the
-  underlying guest events and property/calendar, preserved
-  across recalculations and Keymaster adjustments, to prevent
-  calendar clients from showing duplicates.
+  MUST have a stable, deterministic UID preserved across
+  recalculations and Keymaster adjustments, to prevent calendar
+  clients from showing duplicates. The UID derivation MUST NOT
+  expose sensitive or correlatable source identifiers from guest
+  events.
 - **FR-011**: TurnoverCal MUST handle the case where no gap
   exists between guests (zero-duration turnover) by creating
   an event with a minimal duration (1 minute) to ensure
