@@ -37,7 +37,7 @@ before proceeding to planning
 ## Consistency
 
 - [x] RFC 5545 compliance referenced in FR-004 aligns with
-      constitution section III "User Experience Consistency"
+      Constitution section III "User Experience Consistency"
       (see .specify/memory/constitution.md)
 - [x] Configurable retention period (FR-006) has a specified
       default (6 weeks)

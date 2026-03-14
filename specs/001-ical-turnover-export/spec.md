@@ -114,7 +114,7 @@ optional functionality.
 
 **Independent Test**: Can be tested by configuring a Rental
 Control calendar with Keymaster lock management, creating a
-multi-day turnover window, triggering the designated lock unlock
+multi-day turnover window, triggering the designated unlock
 event, and verifying the turnover event end time is adjusted.
 
 **Acceptance Scenarios**:
@@ -171,7 +171,7 @@ event, and verifying the turnover event end time is adjusted.
   following day, meaning the turnover window extends through the
   end of the unlock day. The 15-minute gap between the turnover
   end and guest check-in is expected — the turnover event tracks
-  when cleaning is complete, not the full idle period.
+  the cleaning completion date, not the full idle period.
 - What happens when a guest event is modified in Rental Control
   (check-in/checkout time changes)? The corresponding turnover
   event MUST be recalculated to reflect the updated times.
@@ -187,13 +187,15 @@ event, and verifying the turnover event end time is adjusted.
   the start time is the checkout time of the departing guest and
   the end time is the check-in time of the arriving guest.
 - **FR-003**: TurnoverCal MUST expose a publicly accessible iCal
-  feed URL that requires no authentication to access. The URL
-  MUST use a high-entropy, unguessable token to prevent URL
-  guessing. The URL MUST be auto-generated based on the instance
-  identifier, with an optional user-configurable path prefix.
-  User-configurable overrides MUST NOT remove or reduce the
-  entropy of the token portion of the URL. The token MUST be
-  revocable and regenerable through the integration options flow.
+  feed URL that does not require interactive authentication or
+  authentication headers to access. Access is controlled by a
+  secret URL token generated from a cryptographically secure
+  random number generator. The token MUST NOT be derived from
+  predictable values such as the instance identifier. The URL
+  path MAY include a user-configurable prefix, but overrides
+  MUST NOT remove or reduce the entropy of the token portion.
+  The token MUST be revocable and regenerable through the
+  integration options flow.
 - **FR-004**: The iCal feed MUST conform to RFC 5545 and be
   consumable by any standards-compliant calendar client
   (Google Calendar, Apple Calendar, Outlook, etc.).
@@ -288,12 +290,15 @@ event, and verifying the turnover event end time is adjusted.
 - **SC-004**: When a Keymaster unlock event occurs during a
   turnover window, the feed reflects the adjusted end time
   within 1 minute of the event.
-- **SC-005**: The iCal feed is accessible without authentication
-  from any network client that can reach the Home Assistant
-  instance.
+- **SC-005**: The iCal feed is accessible without interactive
+  authentication from any network client that possesses the
+  secret URL token and can reach the Home Assistant instance.
 - **SC-006**: Property managers can configure TurnoverCal in
   under 3 minutes through the standard Home Assistant setup
   flow.
 - **SC-007**: Zero-duration turnovers (back-to-back guests) are
   visible in the feed, alerting cleaning staff that no gap
   exists.
+- **SC-008**: The iCal feed endpoint responds within 2 seconds
+  under typical load (single property with up to 1 year of
+  cached events).
