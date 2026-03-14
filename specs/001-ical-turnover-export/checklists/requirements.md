@@ -38,7 +38,7 @@ before proceeding to planning
 
 - [x] RFC 5545 compliance referenced in FR-004 aligns with
       Constitution section III "User Experience Consistency"
-      (see ../../.specify/memory/constitution.md)
+      (see ../../../.specify/memory/constitution.md)
 - [x] Configurable retention period (FR-006) has a specified
       default (6 weeks)
 - [x] Lock monitoring (FR-008/FR-009) is conditional on
