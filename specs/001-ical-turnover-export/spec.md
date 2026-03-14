@@ -234,11 +234,11 @@ event, and verifying the turnover event end time is adjusted.
   recalculations and Keymaster adjustments, to prevent calendar
   clients from showing duplicates. The UID MUST be derived
   using a one-way transformation so that source guest event
-  identifiers cannot be recovered or correlated from the UID.
+  identifiers cannot be recovered from the UID value alone.
 - **FR-011**: TurnoverCal MUST handle the case where no gap
-  exists between guests (zero-duration turnover) by creating
-  an event with a minimal duration (1 minute) to ensure
-  visibility across calendar clients.
+  exists between guests (zero-duration turnover) by setting
+  DTEND to DTSTART plus 1 minute, ensuring visibility across
+  calendar clients.
 - **FR-012**: TurnoverCal MUST NOT generate turnover events for
   negative time windows (overlapping bookings) and MUST log
   a warning when this condition is detected.
