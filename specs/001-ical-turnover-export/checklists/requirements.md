@@ -5,6 +5,11 @@ SPDX-License-Identifier: Apache-2.0
 
 # Requirements Checklist: TurnoverCal iCal Export
 
+**Purpose**: Validate specification completeness and quality
+before proceeding to planning
+**Created**: 2026-03-14
+**Feature**: [spec.md](../spec.md)
+
 ## Completeness
 
 - [x] All user stories have acceptance scenarios with

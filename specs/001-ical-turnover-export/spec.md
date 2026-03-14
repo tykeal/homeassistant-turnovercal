@@ -100,8 +100,9 @@ configured retention period.
 A property manager has a Keymaster-managed lock integrated with
 Rental Control. When the cleaning staff unlocks the door using a
 designated code during a multi-day turnover window, TurnoverCal
-automatically adjusts the turnover event end time to the end of
-the unlock date, reflecting that the property is ready earlier
+automatically adjusts the turnover event DTEND to the start of
+the next calendar day following the unlock date, reflecting that
+the property is ready earlier
 than the original checkout-to-check-in window. If the next guest
 check-in is on the same calendar day as the unlock, no adjustment
 is made since the original end time already reflects that day.
@@ -187,9 +188,10 @@ event, and verifying the turnover event end time is adjusted.
   feed URL that requires no authentication to access. The URL
   MUST use a high-entropy, unguessable token to prevent URL
   guessing. The URL MUST be auto-generated based on the instance
-  identifier, with an optional user-configurable path override.
-  The token MUST be revocable and regenerable through the
-  integration options flow.
+  identifier, with an optional user-configurable path prefix.
+  User-configurable overrides MUST NOT remove or reduce the
+  entropy of the token portion of the URL. The token MUST be
+  revocable and regenerable through the integration options flow.
 - **FR-004**: The iCal feed MUST conform to RFC 5545 and be
   consumable by any standards-compliant calendar client
   (Google Calendar, Apple Calendar, Outlook, etc.).
@@ -215,7 +217,11 @@ event, and verifying the turnover event end time is adjusted.
   used as the non-inclusive DTEND per RFC 5545 semantics.
 - **FR-010**: TurnoverCal MUST update existing turnover events
   when the underlying guest events are modified in Rental
-  Control (time changes, cancellations).
+  Control (time changes, cancellations). Each turnover event
+  MUST have a stable, deterministic UID derived from the
+  underlying guest events and property/calendar, preserved
+  across recalculations and Keymaster adjustments, to prevent
+  calendar clients from showing duplicates.
 - **FR-011**: TurnoverCal MUST handle the case where no gap
   exists between guests (zero-duration turnover) by creating
   an event with a minimal duration (1 minute) to ensure
