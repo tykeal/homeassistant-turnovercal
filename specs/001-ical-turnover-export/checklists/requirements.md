@@ -67,5 +67,6 @@ before proceeding to planning
       user-configurable override
 - [x] FR-009 end-time adjustment: uses next-guest check-in
       time if check-in is same calendar day (local timezone) as
-      unlock; otherwise start of next day (00:00) as
-      non-inclusive DTEND per RFC 5545
+      unlock; otherwise DTEND is 00:00 on the day after
+      unlock, extending the window through end of unlock day
+      per RFC 5545 non-inclusive DTEND semantics

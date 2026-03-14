@@ -100,12 +100,11 @@ configured retention period.
 A property manager has a Keymaster-managed lock integrated with
 Rental Control. When the cleaning staff unlocks the door using a
 designated code during a multi-day turnover window, TurnoverCal
-automatically adjusts the turnover event DTEND to the start of
-the next calendar day following the unlock date, reflecting that
-the property is ready earlier
-than the original checkout-to-check-in window. If the next guest
-check-in is on the same calendar day as the unlock, no adjustment
-is made since the original end time already reflects that day.
+shortens the turnover event to end on the unlock day, reflecting
+that the property is ready earlier than the original
+checkout-to-check-in window. If the next guest check-in is on
+the same calendar day as the unlock, no adjustment is made since
+the original end time already reflects that day.
 
 **Why this priority**: This is an enhancement that adds real-time
 accuracy to turnover tracking. It depends on the core turnover
@@ -123,9 +122,9 @@ event, and verifying the turnover event end time is adjusted.
 1. **Given** a turnover event spanning March 10 at 11:00 to
    March 12 at 15:00 with a Keymaster lock configured, **When**
    the cleaning staff unlock event occurs on March 10 at 14:30,
-   **Then** the turnover event end time is recalculated to
-   March 11 at 00:00 (start of next day after the unlock date,
-   since the next guest check-in is on a different day).
+   **Then** DTEND is set to March 11 at 00:00, representing the
+   turnover window extending through end of March 10 (since the
+   next guest check-in is on a different day).
 2. **Given** a turnover event with a Keymaster lock configured,
    **When** no unlock event occurs during the turnover window,
    **Then** the turnover event retains its original end time
@@ -168,8 +167,11 @@ event, and verifying the turnover event end time is adjusted.
 - What happens when the Keymaster unlock event occurs at 23:58
   and the next guest check-in is at 00:15 the following day?
   "Same day" is determined by calendar date in local timezone,
-  so these are different days and the end time is set to 00:00
-  the following day (non-inclusive DTEND per RFC 5545).
+  so these are different days. DTEND is set to 00:00 the
+  following day, meaning the turnover window extends through the
+  end of the unlock day. The 15-minute gap between the turnover
+  end and guest check-in is expected — the turnover event tracks
+  when cleaning is complete, not the full idle period.
 - What happens when a guest event is modified in Rental Control
   (check-in/checkout time changes)? The corresponding turnover
   event MUST be recalculated to reflect the updated times.
@@ -212,9 +214,9 @@ event, and verifying the turnover event end time is adjusted.
   date in the Home Assistant configured local timezone. If the
   next guest check-in falls on the same calendar day as the
   unlock event, the end time remains the original check-in time.
-  Otherwise, the end time is set to the start of the next
-  calendar day (00:00 local time) following the unlock day,
-  used as the non-inclusive DTEND per RFC 5545 semantics.
+  Otherwise, DTEND is set to 00:00 on the day after the unlock,
+  representing the turnover window extending through the end of
+  the unlock day per RFC 5545 non-inclusive DTEND semantics.
 - **FR-010**: TurnoverCal MUST update existing turnover events
   when the underlying guest events are modified in Rental
   Control (time changes, cancellations). Each turnover event
