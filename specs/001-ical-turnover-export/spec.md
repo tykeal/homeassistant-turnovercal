@@ -101,13 +101,12 @@ configured retention period.
 A property manager has a Keymaster-managed lock integrated with
 Rental Control. When the cleaning staff unlocks the door using a
 designated code during a multi-day turnover window, TurnoverCal
-shortens the turnover event to cover only the unlock date,
-indicating the property turnover is complete. The unlock signals
-the completion date — DTEND is set to midnight following the
-unlock day so that the event spans the full calendar day on
-which cleaning occurred. If the next guest check-in is on the
-same calendar day as the unlock, no adjustment is made since the
-original end time already reflects that day.
+shortens the turnover event by moving DTEND to 00:00 the day
+after the unlock, so the event extends through the end of the
+unlock day rather than continuing to the original check-in date.
+If the next guest check-in is on the same calendar day as the
+unlock, no adjustment is made since the original end time
+already reflects that day.
 
 **Why this priority**: This is an enhancement that adds real-time
 accuracy to turnover tracking. It depends on the core turnover
