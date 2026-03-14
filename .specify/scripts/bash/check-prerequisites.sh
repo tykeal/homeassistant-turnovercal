@@ -175,7 +175,7 @@ if $JSON_MODE; then
     fi
 else
     # Text output
-    echo "FEATURE_DIR:$FEATURE_DIR"
+    echo "FEATURE_DIR: $FEATURE_DIR"
     echo "AVAILABLE_DOCS:"
 
     # Show status of each potential document

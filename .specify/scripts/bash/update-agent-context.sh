@@ -378,7 +378,13 @@ create_new_agent_file() {
     if sed --version >/dev/null 2>&1; then
         sed -i.bak2 's/\\n/\n/g' "$temp_file"
     else
-        perl -pi -e 's/\\n/\n/g' "$temp_file"
+        python3 -c "
+import sys
+with open(sys.argv[1], 'r') as f:
+    content = f.read()
+with open(sys.argv[1], 'w') as f:
+    f.write(content.replace(r'\n', '\n'))
+" "$temp_file"
     fi
 
     # Clean up backup files
