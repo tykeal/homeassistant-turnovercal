@@ -170,7 +170,7 @@ or the lock integration failed. TurnoverCal provides a Home
 Assistant service call (`turnovercal.mark_cleaning_started`) that
 has the same effect as a Keymaster unlock: it adjusts DTSTART if
 called during the early-unlock grace period, or shortens DTEND if
-called during an active multi-day turnover window. This service
+called during an active turnover window. This service
 can be triggered from HA automations, dashboard buttons, NFC tags,
 or any other HA automation trigger.
 

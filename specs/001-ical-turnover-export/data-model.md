@@ -19,7 +19,7 @@ Represents a cleaning window between two consecutive guest stays.
 
 | Field | Type | Description | Constraints |
 | --- | --- | --- | --- |
-| uid | `str` | Deterministic event identifier | SHA-256 hash of source event IDs; format `{hash}@turnovercal.homeassistant`; immutable across recalculations |
+| uid | `str` | Deterministic event identifier | Truncated SHA-256 hex digest of source event IDs (first 16 chars); format `{hex16}@turnovercal.homeassistant`; immutable across recalculations |
 | summary | `str` | Event title for iCal feed | Must not contain guest PII (FR-014); format: `"{prefix} - {property_name}"` |
 | dtstart | `datetime` | Turnover window start (guest checkout) | Timezone-aware; sourced from departing guest event `end` |
 | dtend | `datetime` | Turnover window end (next guest check-in) | Timezone-aware; sourced from arriving guest event `start`; may be adjusted by lock event |

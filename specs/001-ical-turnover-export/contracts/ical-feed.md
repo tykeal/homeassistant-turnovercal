@@ -104,15 +104,19 @@ END:VCALENDAR
 
 **VEVENT properties** (per turnover event):
 
+<!-- markdownlint-disable MD013 -->
+
 | Property | Type | Description |
 | --- | --- | --- |
-| UID | text | Stable SHA-256 hash; `{hash}@turnovercal.homeassistant` |
+| UID | text | Truncated SHA-256 hex digest (16 chars); `{hex16}@turnovercal.homeassistant` |
 | DTSTAMP | UTC datetime | When the event was last generated/modified |
 | DTSTART | local datetime + TZID | Turnover window start (checkout time) |
 | DTEND | local datetime + TZID | Window end (next check-in or lock-adjusted) |
 | SUMMARY | text | `"{prefix} - {property_name}"`; no guest PII |
 | DESCRIPTION | text | `"Cleaning window between guests"` |
 | STATUS | text | `CONFIRMED` for all events |
+
+<!-- markdownlint-enable MD013 -->
 
 **VTIMEZONE**: Automatically generated for the HA-configured local
 timezone. Always present when VEVENT datetimes use TZID parameter.
