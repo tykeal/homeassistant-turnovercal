@@ -167,6 +167,7 @@ arise from storing offsets. UTC timestamps (`created_at`,
 ```json
 {
   "version": 1,
+  "feed_token": "URL-SAFE-BASE64-TOKEN-43-CHARS",
   "events": {
     "a1b2c3d4e5f60718@turnovercal.homeassistant": {
       "uid": "a1b2c3d4e5f60718@turnovercal.homeassistant",

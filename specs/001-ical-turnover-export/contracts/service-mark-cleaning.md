@@ -115,6 +115,7 @@ Services in Home Assistant do not return data. Outcomes are:
 | Within early-unlock grace period | DTSTART moved to signal time; event cached; `adjustment_source` set to `"service_call"` |
 | No applicable turnover window | Warning logged; no change |
 | Invalid entity target | Error raised (`ServiceValidationError`) |
+| Both entity target and `config_entry_id` provided | Error raised (`ServiceValidationError`) |
 | Neither entity target nor `config_entry_id` | Error raised (`ServiceValidationError`) |
 
 <!-- markdownlint-enable MD013 -->
