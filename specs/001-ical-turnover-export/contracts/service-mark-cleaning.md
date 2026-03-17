@@ -59,6 +59,8 @@ mark_cleaning_started:
       name: Timestamp
       description: >-
         Override timestamp for when cleaning started.
+        Interpreted in the Home Assistant instance's
+        configured time zone (Settings > System > General).
         Defaults to current time if not provided.
         Useful for retroactive adjustments.
       required: false
