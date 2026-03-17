@@ -186,8 +186,9 @@ identically to a Keymaster unlock scenario.
 **Acceptance Scenarios**:
 
 1. **Given** an active turnover window from March 10 at 11:00 to
-   March 12 at 15:00, **When** the `turnovercal.mark_cleaning
-   _started` service is called on March 10 at 14:30, **Then**
+   March 12 at 15:00, **When** the
+   `turnovercal.mark_cleaning_started` service is called on
+   March 10 at 14:30, **Then**
    DTEND is adjusted identically to a Keymaster unlock (00:00 on
    March 11, since next check-in is on a different day).
 2. **Given** a guest checkout scheduled for March 10 at 11:00 and

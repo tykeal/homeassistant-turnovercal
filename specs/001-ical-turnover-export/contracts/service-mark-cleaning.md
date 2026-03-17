@@ -45,6 +45,16 @@ mark_cleaning_started:
       integration: turnovercal
       domain: calendar
   fields:
+    config_entry_id:
+      name: Config entry ID
+      description: >-
+        TurnoverCal config entry ID. Alternative to entity
+        targeting when calling from scripts or REST API.
+      required: false
+      example: "a1b2c3d4e5f6"
+      selector:
+        config_entry:
+          integration: turnovercal
     timestamp:
       name: Timestamp
       description: >-
@@ -77,6 +87,14 @@ data:
   timestamp: "2026-03-10T09:30:00"
 ```
 
+### Via config entry ID (no entity target)
+
+```yaml
+service: turnovercal.mark_cleaning_started
+data:
+  config_entry_id: "a1b2c3d4e5f6"
+```
+
 ## Response
 
 Services in Home Assistant do not return data. Outcomes are:
@@ -89,6 +107,7 @@ Services in Home Assistant do not return data. Outcomes are:
 | Within early-unlock grace period | DTSTART moved to signal time; event cached; `adjustment_source` set to `"service_call"` |
 | No applicable turnover window | Warning logged; no change |
 | Invalid entity target | Error raised (`ServiceValidationError`) |
+| Neither entity target nor `config_entry_id` | Error raised (`ServiceValidationError`) |
 
 <!-- markdownlint-enable MD013 -->
 

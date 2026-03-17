@@ -92,7 +92,7 @@ uv run ruff format custom_components/ tests/
 uv run mypy custom_components/turnovercal/
 
 # Docstring coverage (must be 100%)
-uv run interrogate -vv custom_components/turnovercal/
+uv run interrogate -vv --fail-under=100 custom_components/turnovercal/
 ```
 
 ## Key Dependencies
