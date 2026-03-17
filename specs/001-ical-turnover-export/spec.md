@@ -108,6 +108,14 @@ If the next guest check-in is on the same calendar day as the
 unlock, no adjustment is made since the original end time
 already reflects that day.
 
+Additionally, when a Keymaster unlock occurs within a configurable
+grace period before the scheduled checkout time (default 2 hours),
+TurnoverCal moves the turnover event's DTSTART to the unlock time,
+recognizing that the guest departed early and cleaning has begun.
+This gives cleaning staff credit for the additional time. Unlocks
+occurring earlier than the grace period before checkout are ignored
+to avoid false positives from guests still occupying the property.
+
 **Why this priority**: This is an enhancement that adds real-time
 accuracy to turnover tracking. It depends on the core turnover
 calendar (P1) and benefits from caching (P2) to retain the
@@ -140,6 +148,60 @@ event, and verifying the turnover event end time is adjusted.
    the cleaning staff unlock event occurs on March 10 at 12:00,
    **Then** the turnover event end time remains March 10 at
    15:00 (next guest check-in is on the same day as the unlock).
+5. **Given** a guest checkout scheduled for March 10 at 11:00
+   and a 2-hour early-unlock grace period, **When** the cleaning
+   staff unlock event occurs on March 10 at 09:30, **Then**
+   DTSTART is moved from 11:00 to 09:30, recognizing that
+   cleaning began before the scheduled checkout.
+6. **Given** a guest checkout scheduled for March 10 at 11:00
+   and a 2-hour early-unlock grace period, **When** an unlock
+   event occurs on March 10 at 07:00, **Then** the unlock is
+   ignored because it falls outside the grace period (more than
+   2 hours before checkout), and the turnover event is unchanged.
+
+---
+
+### User Story 4 - Manual Cleaning Signal (Priority: P3)
+
+Property managers or cleaning staff need to signal that cleaning
+has started when no Keymaster event fires — either because no
+smart lock is installed, the door was left open by departing guests,
+or the lock integration failed. TurnoverCal provides a Home
+Assistant service call (`turnovercal.mark_cleaning_started`) that
+has the same effect as a Keymaster unlock: it adjusts DTSTART if
+called during the early-unlock grace period, or shortens DTEND if
+called during an active turnover window. This service
+can be triggered from HA automations, dashboard buttons, NFC tags,
+or any other HA automation trigger.
+
+**Why this priority**: Same phase as Keymaster support (P3) since
+it shares the same turnover adjustment logic. Provides a critical
+fallback for properties without smart locks and for edge cases
+where lock events fail to fire.
+
+**Independent Test**: Can be tested by creating a turnover window,
+calling the service, and verifying the event times are adjusted
+identically to a Keymaster unlock scenario.
+
+**Acceptance Scenarios**:
+
+1. **Given** an active turnover window from March 10 at 11:00 to
+   March 12 at 15:00, **When** the
+   `turnovercal.mark_cleaning_started` service is called on
+   March 10 at 14:30, **Then**
+   DTEND is adjusted identically to a Keymaster unlock (00:00 on
+   March 11, since next check-in is on a different day).
+2. **Given** a guest checkout scheduled for March 10 at 11:00 and
+   a 2-hour early-unlock grace period, **When** the service is
+   called on March 10 at 09:45, **Then** DTSTART is moved to
+   09:45, recognizing early cleaning start.
+3. **Given** no Keymaster lock is configured, **When** the service
+   is called during a turnover window, **Then** the adjustment
+   is applied without requiring any lock integration.
+4. **Given** no active turnover window and no upcoming turnover
+   within the grace period, **When** the service is called,
+   **Then** the call is logged as a warning and no adjustment
+   is made.
 
 ---
 
@@ -161,11 +223,16 @@ event, and verifying the turnover event end time is adjusted.
 - What happens when TurnoverCal is first installed and no
   historical data exists? The feed MUST be valid but empty
   until guest events are processed.
-- What happens when the Keymaster unlock event occurs outside
-  of an active turnover window (including before the checkout
-  time while the departing guest is still present, or after the
-  next guest has checked in)? The event MUST be ignored and no
-  turnover adjustment made.
+- What happens when a Keymaster unlock event occurs outside
+  of an active turnover window?
+  - *Before the early-unlock grace period*: The unlock is
+    ignored and no turnover adjustment is made (e.g., guest
+    activity hours before checkout).
+  - *Within the early-unlock grace period before checkout*
+    (default 2 hours): The unlock is honored as an early
+    departure — DTSTART moves to the unlock time (FR-017).
+  - *After the next guest has checked in*: The unlock is
+    ignored — the turnover window is already past.
 - What happens when the Keymaster unlock event occurs at 23:58
   and the next guest check-in is at 00:15 the following day?
   "Same day" is determined by calendar date in local timezone,
@@ -177,6 +244,15 @@ event, and verifying the turnover event end time is adjusted.
 - What happens when a guest event is modified in Rental Control
   (check-in/checkout time changes)? The corresponding turnover
   event MUST be recalculated to reflect the updated times.
+- What happens after the last guest event in the calendar (no
+  following guest)? TurnoverCal MUST generate a trailing
+  turnover event starting at the last guest's checkout time with
+  a duration equal to the configured trailing turnover duration
+  (default 4 hours). This ensures cleaning staff are notified
+  even when no subsequent booking exists. If a new guest event
+  is later added after this checkout, the trailing event MUST be
+  replaced by a standard turnover event spanning checkout to the
+  new guest's check-in.
 
 ## Requirements *(mandatory)*
 
@@ -188,6 +264,12 @@ event, and verifying the turnover event end time is adjusted.
 - **FR-002**: TurnoverCal MUST generate turnover events where
   the start time is the checkout time of the departing guest and
   the end time is the check-in time of the arriving guest.
+  When no arriving guest follows a departure (the last event in
+  the calendar), TurnoverCal MUST generate a trailing turnover
+  event whose DTEND is DTSTART plus a configurable trailing
+  turnover duration (default 4 hours). This trailing event MUST
+  be replaced by a standard turnover event if a subsequent guest
+  event is later added to the Rental Control calendar.
 - **FR-003**: TurnoverCal MUST expose a publicly accessible iCal
   feed URL that does not require interactive authentication or
   authentication headers to access. Access is controlled by a
@@ -216,8 +298,15 @@ event, and verifying the turnover event end time is adjusted.
   period MUST be automatically removed.
 - **FR-008**: When the tracked Rental Control calendar is
   configured with a Keymaster lock, TurnoverCal MUST monitor
-  for a configurable unlock event type (selected during setup)
-  during active turnover windows.
+  the `keymaster_lock_state_changed` event for unlock actions
+  matching the configured lock `entity_id` and a user-configured
+  cleaning staff code slot number. Both the lock entity and the
+  code slot number MUST be specified during setup and MUST
+  be changeable via the options flow. Only unlock events whose
+  `entity_id` matches the configured lock AND whose
+  `code_slot_num` matches the configured cleaning slot trigger
+  turnover adjustments; all other unlock events (wrong lock,
+  guest codes, manual unlocks, RF unlocks) MUST be ignored.
 - **FR-009**: When a designated Keymaster unlock event occurs
   during a turnover window, TurnoverCal MUST recalculate the
   turnover event end time. "Same day" is determined by calendar
@@ -250,6 +339,29 @@ event, and verifying the turnover event end time is adjusted.
   since the feed is publicly accessible.
 - **FR-015**: TurnoverCal MUST be configurable through the
   standard Home Assistant integration setup flow.
+- **FR-016**: The trailing turnover duration MUST be configurable
+  with a default value of 4 hours (range: 1–24 hours). This
+  duration is used for turnover events generated after the last
+  guest checkout when no subsequent guest event exists.
+- **FR-017**: When a Keymaster unlock event occurs within a
+  configurable grace period before the scheduled checkout time
+  (default 2 hours), TurnoverCal MUST move the turnover event's
+  DTSTART to the unlock time, recognizing an early guest
+  departure. Unlocks outside this grace period (earlier than the
+  grace window before checkout) MUST be ignored.
+- **FR-018**: The early-unlock grace period MUST be configurable
+  with a default value of 2 hours (range: 0–12 hours). A value
+  of 0 disables early-unlock detection entirely.
+- **FR-019**: TurnoverCal MUST expose a Home Assistant service
+  (`turnovercal.mark_cleaning_started`) that triggers the same
+  turnover event adjustments as a Keymaster unlock event. The
+  service MUST accept a `config_entry_id` parameter (or entity
+  target) to identify which TurnoverCal instance to act on. The
+  service MUST apply the same DTSTART grace-period logic (FR-017)
+  and DTEND shortening logic (FR-009) as Keymaster events. This
+  service provides a fallback for properties without Keymaster,
+  for cases where lock events fail to fire, and for manual
+  override scenarios.
 
 ### Key Entities
 

@@ -75,5 +75,16 @@ jobs:
       - name: 'Update draft release'
         # yamllint disable-line rule:line-length
         uses: release-drafter/release-drafter@3a7fb5c85b80b1dda66e1ccb94009adbbd32fce3 # v7.0.0
+        with:
+          # On PR events the default target resolves to
+          # refs/pull/N/merge which is invalid for releases.
+          # Point to the PR base branch (or ref_name on push).
+          # yamllint disable-line rule:line-length
+          commitish: ${{ github.event.pull_request.base.ref || github.ref_name }}  # codespell:ignore commitish
+          # Only create/update draft releases on push to main.
+          # On PR events, only run the autolabeler.
+          # yamllint disable-line rule:line-length
+          disable-releaser: ${{ github.event_name != 'push' }}
+          disable-autolabeler: ${{ github.event_name == 'push' }}
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
