@@ -99,7 +99,7 @@ END:VCALENDAR
 | PRODID | -//Home Assistant//TurnoverCal//EN | Identifies producer |
 | CALSCALE | GREGORIAN | RFC 5545 default |
 | METHOD | PUBLISH | Read-only feed |
-| X-WR-CALNAME | `{prefix} - {property}` | Calendar display name |
+| X-WR-CALNAME | `{prefix} - {property_name}` | Calendar display name |
 | X-WR-TIMEZONE | `{timezone}` | Hint for clients without VTIMEZONE support |
 
 **VEVENT properties** (per turnover event):

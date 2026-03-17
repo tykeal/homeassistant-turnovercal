@@ -299,12 +299,14 @@ identically to a Keymaster unlock scenario.
 - **FR-008**: When the tracked Rental Control calendar is
   configured with a Keymaster lock, TurnoverCal MUST monitor
   the `keymaster_lock_state_changed` event for unlock actions
-  matching a user-configured cleaning staff code slot number.
-  The code slot number MUST be specified during setup and MUST
+  matching the configured lock `entity_id` and a user-configured
+  cleaning staff code slot number. Both the lock entity and the
+  code slot number MUST be specified during setup and MUST
   be changeable via the options flow. Only unlock events whose
+  `entity_id` matches the configured lock AND whose
   `code_slot_num` matches the configured cleaning slot trigger
-  turnover adjustments; all other unlock events (guest codes,
-  manual unlocks, RF unlocks) MUST be ignored.
+  turnover adjustments; all other unlock events (wrong lock,
+  guest codes, manual unlocks, RF unlocks) MUST be ignored.
 - **FR-009**: When a designated Keymaster unlock event occurs
   during a turnover window, TurnoverCal MUST recalculate the
   turnover event end time. "Same day" is determined by calendar

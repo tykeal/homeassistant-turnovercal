@@ -24,7 +24,10 @@ event is a `CalendarEvent` with `summary`, `start` (check-in datetime),
 coordinator exposes events via `async_get_events(start_date, end_date)`.
 Rental Control applies configurable check-in/check-out times to all-day
 events (defaults: 16:00 check-in, 11:00 check-out). Each calendar
-supports its own timezone via `ZoneInfo`.
+supports its own timezone via `ZoneInfo`. TurnoverCal reads events
+in whatever timezone Rental Control provides, but encodes all
+output (iCal DTSTART/DTEND, "same day" comparisons, storage) using
+the Home Assistant instance's configured local timezone.
 
 **Alternatives considered**:
 
@@ -266,7 +269,7 @@ timestamps use explicit offset):
       "timezone": "America/New_York",
       "source_checkout_id": "...",
       "source_checkin_id": "...",
-      "created_at": "2026-03-01T12:00:00Z",
+      "created_at": "2026-03-01T12:00:00+00:00",
       "status": "scheduled",
       "is_trailing": false,
       "adjusted_by_lock": false,
@@ -276,7 +279,7 @@ timestamps use explicit offset):
       "original_dtstart": null
     }
   },
-  "last_cleanup": "2026-03-16T00:00:00Z"
+  "last_cleanup": "2026-03-16T00:00:00+00:00"
 }
 ```
 
