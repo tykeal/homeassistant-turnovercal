@@ -109,7 +109,7 @@ def _handle_lock_event(event: Event) -> None:
         return
     # Filter: must be the configured cleaning staff slot
     code_slot = data.get("code_slot_num", 0)
-    if code_slot != configured_cleaning_slot:
+    if code_slot != configured_cleaning_code_slot:
         return
     # This is a cleaning staff unlock — trigger adjustment
     _apply_cleaning_signal(now=dt_util.utcnow())
