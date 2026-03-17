@@ -168,8 +168,8 @@ arise from storing offsets. UTC timestamps (`created_at`,
 {
   "version": 1,
   "events": {
-    "a1b2c3d4e5f6g7h8@turnovercal.homeassistant": {
-      "uid": "a1b2c3d4e5f6g7h8@turnovercal.homeassistant",
+    "a1b2c3d4e5f60718@turnovercal.homeassistant": {
+      "uid": "a1b2c3d4e5f60718@turnovercal.homeassistant",
       "summary": "Turnover - Beach House",
       "dtstart": "2026-03-10T11:00:00",
       "dtend": "2026-03-10T15:00:00",

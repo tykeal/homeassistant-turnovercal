@@ -24,7 +24,8 @@ SPDX-License-Identifier: Apache-2.0
 
 ```bash
 # Clone and enter the repository
-cd turnovercal
+git clone git@github.com:tykeal/homeassistant-turnovercal.git
+cd homeassistant-turnovercal
 
 # Install dependencies
 uv sync
