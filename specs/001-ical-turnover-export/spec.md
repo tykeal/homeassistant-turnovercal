@@ -223,14 +223,16 @@ identically to a Keymaster unlock scenario.
 - What happens when TurnoverCal is first installed and no
   historical data exists? The feed MUST be valid but empty
   until guest events are processed.
-- What happens when the Keymaster unlock event occurs outside
-  of an active turnover window (including before the early-unlock
-  grace period preceding checkout while the departing guest is
-  still present, or after the next guest has checked in)? The
-  event MUST be ignored and no turnover adjustment made. Unlocks
-  within the configurable grace period before scheduled checkout
-  (default 2 hours) MUST be honored as early departures,
-  moving DTSTART to the unlock time (FR-017).
+- What happens when a Keymaster unlock event occurs outside
+  of an active turnover window?
+  - *Before the early-unlock grace period*: The unlock is
+    ignored and no turnover adjustment is made (e.g., guest
+    activity hours before checkout).
+  - *Within the early-unlock grace period before checkout*
+    (default 2 hours): The unlock is honored as an early
+    departure — DTSTART moves to the unlock time (FR-017).
+  - *After the next guest has checked in*: The unlock is
+    ignored — the turnover window is already past.
 - What happens when the Keymaster unlock event occurs at 23:58
   and the next guest check-in is at 00:15 the following day?
   "Same day" is determined by calendar date in local timezone,

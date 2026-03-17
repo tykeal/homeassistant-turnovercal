@@ -147,10 +147,13 @@ Returned when the token is invalid or missing.
 HTTP/1.1 401 Unauthorized
 ```
 
-### 404 Not Found
+### 401 Unauthorized (removed entry)
 
-Returned when the config entry associated with the token has been
-removed (integration unloaded).
+If the config entry associated with the token has been removed
+(integration unloaded), the endpoint also returns 401. From the
+client's perspective, the token no longer resolves to an active
+instance and is indistinguishable from an invalid token — this
+avoids leaking whether a token was ever valid.
 
 **Body**: Empty.
 
