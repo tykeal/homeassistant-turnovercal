@@ -156,6 +156,14 @@ flowchart TD
 
 ## Serialization Format (Store JSON)
 
+All `dtstart`, `dtend`, `original_dtstart`, and `original_dtend`
+values are stored as **naive local time** ISO 8601 strings (no
+offset, no `Z` suffix). The companion `timezone` field (IANA zone
+name) provides the interpretation context. This mirrors how Rental
+Control stores event times and avoids DST-ambiguity issues that
+arise from storing offsets. UTC timestamps (`created_at`,
+`last_cleanup`, `lock_unlock_time`) include an explicit offset.
+
 ```json
 {
   "version": 1,

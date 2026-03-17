@@ -250,7 +250,9 @@ survives HA restarts. Time-based cleanup runs via
 `async_track_time_interval()` to remove events past the retention
 period.
 
-**Storage schema**:
+**Storage schema** (`dtstart`/`dtend` are naive local time; the
+companion `timezone` field provides interpretation context; UTC
+timestamps use explicit offset):
 
 ```json
 {

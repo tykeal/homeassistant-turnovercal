@@ -26,7 +26,8 @@ Keymaster `keymaster_lock_state_changed` unlock event:
   (00:00 day after call if next check-in is on a different day;
   unchanged if same day)
 - **Within early-unlock grace period before checkout**: Moves
-  DTSTART to the current time per FR-017
+  DTSTART to the effective signal time (current time, or the
+  provided `timestamp` override) per FR-017
 - **Outside both windows**: Logged as a warning; no adjustment
 
 ## Service Data Schema
@@ -68,6 +69,11 @@ mark_cleaning_started:
       selector:
         datetime:
 ```
+
+**Targeting rules**: Callers MUST provide either an entity target
+or `config_entry_id`, but not both. If both are supplied, the
+service raises `ServiceValidationError`. If neither is supplied,
+the service also raises `ServiceValidationError`.
 
 ## Request Examples
 

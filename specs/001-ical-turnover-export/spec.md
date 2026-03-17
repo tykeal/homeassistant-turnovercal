@@ -163,7 +163,7 @@ event, and verifying the turnover event end time is adjusted.
 
 ### User Story 4 - Manual Cleaning Signal (Priority: P3)
 
-A property manager or cleaning staff need to signal that cleaning
+Property managers or cleaning staff need to signal that cleaning
 has started when no Keymaster event fires — either because no
 smart lock is installed, the door was left open by departing guests,
 or the lock integration failed. TurnoverCal provides a Home
