@@ -149,100 +149,6 @@ TurnoverCal will be the first consumer of
 - *Polling lock state*: Rejected — introduces latency and unnecessary
   load; event-driven is real-time.
 
-## R-008: Early Guest Departure Detection
-
-**Context**: A guest may leave before the scheduled checkout time,
-and cleaning staff may arrive and unlock the property early. The
-turnover window has not technically started yet. How should
-TurnoverCal handle this?
-
-**Decision**: Honor Keymaster unlock events that occur within a
-configurable grace period before the scheduled checkout time
-(default: 2 hours). When honored, move the turnover event's DTSTART
-to the unlock time, recognizing that cleaning has begun early.
-Unlocks outside this grace period are ignored as before.
-
-**Rationale**: A fixed grace period balances two concerns:
-
-- Avoiding false positives from guest activity well before checkout
-- Recognizing legitimate early departures when cleaners arrive
-  shortly before the scheduled checkout
-
-The 2-hour default matches common STR patterns where guests often
-depart 1–2 hours before the formal checkout time. Setting the grace
-period to 0 disables this feature entirely for users who prefer
-strict window boundaries.
-
-**Behavior**:
-
-```text
-Timeline for scheduled checkout at 11:00, grace period = 2 hours:
-
-  08:00  08:30  09:00  09:30  10:00  10:30  11:00  ...
-  |------|------|------|------|------|------|------|
-  ▲ ignored                   ▲ grace window ▲ turnover starts
-  (too early)                 (unlock honored,    (normal)
-                               DTSTART moves)
-```
-
-- Unlock at 08:30 → ignored (outside 2-hour grace)
-- Unlock at 09:15 → honored, DTSTART moves to 09:15
-- Unlock at 10:30 → honored, DTSTART moves to 10:30
-- Unlock at 11:30 → normal (already within turnover window)
-
-**Alternatives considered**:
-
-- *Ignore all pre-checkout unlocks*: Rejected — fails the common
-  early-departure scenario; cleaning staff get no credit for extra
-  time spent.
-- *Honor all pre-checkout unlocks*: Rejected — high false-positive
-  risk; guests unlocking hours before checkout would incorrectly
-  trigger turnover start.
-- *Move DTSTART to scheduled checkout but mark as "in progress"*:
-  Rejected — loses information about when cleaning actually began;
-  moving DTSTART is more useful for scheduling analysis.
-
-## R-009: Manual Cleaning Signal Fallback
-
-**Context**: Keymaster unlock events may not fire when the door was
-left open by departing guests, no smart lock is installed, or the
-lock integration fails. How should cleaning staff or automations
-signal that cleaning has started?
-
-**Decision**: Expose a Home Assistant service
-(`turnovercal.mark_cleaning_started`) that applies the same
-turnover adjustment logic as a Keymaster unlock event.
-
-**Rationale**: An HA service call is the most composable mechanism
-in the Home Assistant ecosystem. It can be triggered from:
-
-- Dashboard buttons (Lovelace cards)
-- NFC tags (scanned by cleaning staff on arrival)
-- Automations (motion sensors, door contact sensors, etc.)
-- Scripts and scenes
-- Companion app quick actions
-- Voice assistants (Alexa, Google)
-
-The service shares the same internal adjustment handler as Keymaster
-events (both call the same function), ensuring consistent behavior
-regardless of trigger source. The `adjustment_source` field on the
-event distinguishes Keymaster-triggered vs. manually-triggered
-adjustments for auditing.
-
-The service is idempotent — multiple calls during the same window
-are safe; only the first call adjusts the event.
-
-**Alternatives considered**:
-
-- *Companion app notification with action buttons*: Rejected —
-  requires additional integration and couples to the HA mobile app;
-  a service call is more universal and can be wrapped in any UI.
-- *Input boolean entity (toggle)*: Rejected — stateful toggles are
-  harder to manage; a stateless service call with timestamp is
-  cleaner and avoids "forgot to toggle off" issues.
-- *MQTT trigger*: Rejected — adds external dependency; HA service
-  calls are native and require no additional infrastructure.
-
 ## R-003: iCal Feed HTTP Endpoint
 
 **Context**: TurnoverCal must serve an iCal feed over HTTP without
@@ -451,3 +357,97 @@ new, modified, or removed events and recalculate turnover windows.
 - *Direct Rental Control coordinator subscription*: Rejected — tight
   coupling; TurnoverCal should depend only on the public calendar
   entity API.
+
+## R-008: Early Guest Departure Detection
+
+**Context**: A guest may leave before the scheduled checkout time,
+and cleaning staff may arrive and unlock the property early. The
+turnover window has not technically started yet. How should
+TurnoverCal handle this?
+
+**Decision**: Honor Keymaster unlock events that occur within a
+configurable grace period before the scheduled checkout time
+(default: 2 hours). When honored, move the turnover event's DTSTART
+to the unlock time, recognizing that cleaning has begun early.
+Unlocks outside this grace period are ignored as before.
+
+**Rationale**: A fixed grace period balances two concerns:
+
+- Avoiding false positives from guest activity well before checkout
+- Recognizing legitimate early departures when cleaners arrive
+  shortly before the scheduled checkout
+
+The 2-hour default matches common STR patterns where guests often
+depart 1–2 hours before the formal checkout time. Setting the grace
+period to 0 disables this feature entirely for users who prefer
+strict window boundaries.
+
+**Behavior**:
+
+```text
+Timeline for scheduled checkout at 11:00, grace period = 2 hours:
+
+  08:00  08:30  09:00  09:30  10:00  10:30  11:00  ...
+  |------|------|------|------|------|------|------|
+  ▲ ignored                   ▲ grace window ▲ turnover starts
+  (too early)                 (unlock honored,    (normal)
+                               DTSTART moves)
+```
+
+- Unlock at 08:30 → ignored (outside 2-hour grace)
+- Unlock at 09:15 → honored, DTSTART moves to 09:15
+- Unlock at 10:30 → honored, DTSTART moves to 10:30
+- Unlock at 11:30 → normal (already within turnover window)
+
+**Alternatives considered**:
+
+- *Ignore all pre-checkout unlocks*: Rejected — fails the common
+  early-departure scenario; cleaning staff get no credit for extra
+  time spent.
+- *Honor all pre-checkout unlocks*: Rejected — high false-positive
+  risk; guests unlocking hours before checkout would incorrectly
+  trigger turnover start.
+- *Move DTSTART to scheduled checkout but mark as "in progress"*:
+  Rejected — loses information about when cleaning actually began;
+  moving DTSTART is more useful for scheduling analysis.
+
+## R-009: Manual Cleaning Signal Fallback
+
+**Context**: Keymaster unlock events may not fire when the door was
+left open by departing guests, no smart lock is installed, or the
+lock integration fails. How should cleaning staff or automations
+signal that cleaning has started?
+
+**Decision**: Expose a Home Assistant service
+(`turnovercal.mark_cleaning_started`) that applies the same
+turnover adjustment logic as a Keymaster unlock event.
+
+**Rationale**: An HA service call is the most composable mechanism
+in the Home Assistant ecosystem. It can be triggered from:
+
+- Dashboard buttons (Lovelace cards)
+- NFC tags (scanned by cleaning staff on arrival)
+- Automations (motion sensors, door contact sensors, etc.)
+- Scripts and scenes
+- Companion app quick actions
+- Voice assistants (Alexa, Google)
+
+The service shares the same internal adjustment handler as Keymaster
+events (both call the same function), ensuring consistent behavior
+regardless of trigger source. The `adjustment_source` field on the
+event distinguishes Keymaster-triggered vs. manually-triggered
+adjustments for auditing.
+
+The service is idempotent — multiple calls during the same window
+are safe; only the first call adjusts the event.
+
+**Alternatives considered**:
+
+- *Companion app notification with action buttons*: Rejected —
+  requires additional integration and couples to the HA mobile app;
+  a service call is more universal and can be wrapped in any UI.
+- *Input boolean entity (toggle)*: Rejected — stateful toggles are
+  harder to manage; a stateless service call with timestamp is
+  cleaner and avoids "forgot to toggle off" issues.
+- *MQTT trigger*: Rejected — adds external dependency; HA service
+  calls are native and require no additional infrastructure.

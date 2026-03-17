@@ -17,6 +17,11 @@ SPDX-License-Identifier: Apache-2.0
 
 ## Repository Setup
 
+> **Note**: The commands below assume the code scaffolding has been
+> generated. Until then, `uv sync` will fail because
+> `pyproject.toml` does not yet exist. Pre-commit hooks are already
+> functional.
+
 ```bash
 # Clone and enter the repository
 cd turnovercal
@@ -31,7 +36,7 @@ uv run pre-commit install
 uv run pre-commit run --all-files
 ```
 
-## Project Structure
+## Project Structure (Planned)
 
 ```text
 custom_components/turnovercal/

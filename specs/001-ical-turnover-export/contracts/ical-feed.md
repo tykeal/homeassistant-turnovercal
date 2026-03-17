@@ -129,6 +129,7 @@ PRODID:-//Home Assistant//TurnoverCal//EN
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 X-WR-CALNAME:Turnover - Beach House
+X-WR-TIMEZONE:America/New_York
 END:VCALENDAR
 ```
 
