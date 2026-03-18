@@ -1,0 +1,162 @@
+# SPDX-FileCopyrightText: 2026 Andrew Grimberg <tykeal@bardicgrove.org>
+# SPDX-License-Identifier: Apache-2.0
+
+"""Config flow for TurnoverCal integration."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+import voluptuous as vol
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    OptionsFlow,
+)
+
+from custom_components.turnovercal.const import (
+    CONF_CALENDAR_ENTITY,
+    CONF_CLEANING_CODE_SLOT,
+    CONF_LOCK_MONITORING,
+    CONF_PROPERTY_NAME,
+    DOMAIN,
+)
+from custom_components.turnovercal.token import generate_token
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigFlowResult
+
+
+class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for TurnoverCal."""
+
+    VERSION = 1
+
+    async def async_step_user(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Handle the initial setup step.
+
+        Presents a form for entering the calendar entity ID
+        and optional lock monitoring settings. Generates a feed
+        token and creates the config entry.
+
+        Args:
+            user_input: User-submitted form data or None on first show.
+
+        Returns:
+            ConfigFlowResult with form or created entry.
+
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            entity_id = user_input[CONF_CALENDAR_ENTITY]
+
+            # Validate entity exists and is a calendar
+            if not entity_id.startswith("calendar."):
+                errors[CONF_CALENDAR_ENTITY] = "invalid_entity"
+            else:
+                state = self.hass.states.get(entity_id)
+                if state is None:
+                    errors[CONF_CALENDAR_ENTITY] = "invalid_entity"
+
+            if not errors:
+                # Check for duplicate
+                await self.async_set_unique_id(entity_id)
+                self._abort_if_unique_id_configured()
+
+                # Derive property name from entity friendly name
+                friendly = ""
+                state = self.hass.states.get(entity_id)
+                if state is not None:
+                    friendly = state.attributes.get("friendly_name", entity_id)
+                property_name = friendly.removeprefix("Rental Control ")
+
+                # Check lock monitoring preference
+                lock_monitoring = bool(
+                    user_input.get(CONF_LOCK_MONITORING),
+                )
+
+                if (
+                    lock_monitoring
+                    and user_input.get(CONF_CLEANING_CODE_SLOT) is None
+                ):
+                    errors[CONF_CLEANING_CODE_SLOT] = "slot_required"
+
+            if not errors:
+                token = generate_token()
+
+                data: dict[str, Any] = {
+                    CONF_CALENDAR_ENTITY: entity_id,
+                    "feed_token": token,
+                    CONF_LOCK_MONITORING: lock_monitoring,
+                }
+
+                if lock_monitoring:
+                    data[CONF_CLEANING_CODE_SLOT] = user_input[CONF_CLEANING_CODE_SLOT]
+
+                options: dict[str, Any] = {
+                    CONF_PROPERTY_NAME: property_name,
+                }
+
+                return self.async_create_entry(
+                    title=property_name,
+                    data=data,
+                    options=options,
+                )
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_CALENDAR_ENTITY): str,
+                vol.Optional(CONF_LOCK_MONITORING, default=False): bool,
+                vol.Optional(CONF_CLEANING_CODE_SLOT): int,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    @staticmethod
+    def async_get_options_flow(
+        _config_entry: ConfigEntry,
+    ) -> TurnoverCalOptionsFlow:
+        """Return the options flow handler.
+
+        Args:
+            config_entry: The config entry to manage options for.
+
+        Returns:
+            The options flow handler instance.
+
+        """
+        return TurnoverCalOptionsFlow()
+
+
+class TurnoverCalOptionsFlow(OptionsFlow):
+    """Handle TurnoverCal options flow.
+
+    Stub for Phase 4 (US2) implementation.
+    """
+
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Handle the initial options step.
+
+        Args:
+            user_input: User-submitted form data or None on first show.
+
+        Returns:
+            ConfigFlowResult with form or created entry.
+
+        """
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        return self.async_show_form(step_id="init")

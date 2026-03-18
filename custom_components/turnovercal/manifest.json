@@ -2,7 +2,7 @@
   "domain": "turnovercal",
   "name": "TurnoverCal",
   "codeowners": ["@tykeal"],
-  "config_flow": false,
+  "config_flow": true,
   "dependencies": ["rental_control"],
   "documentation": "https://github.com/tykeal/homeassistant-turnovercal",
   "iot_class": "local_polling",

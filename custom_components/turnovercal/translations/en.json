@@ -15,6 +15,13 @@
           "cleaning_code_slot": "The lock code slot number assigned to the cleaning crew."
         }
       }
+    },
+    "error": {
+      "invalid_entity": "Not a valid calendar entity or entity not found.",
+      "slot_required": "Cleaning code slot is required when lock monitoring is enabled."
+    },
+    "abort": {
+      "already_configured": "This calendar is already configured."
     }
   },
   "options": {
