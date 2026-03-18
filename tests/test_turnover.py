@@ -8,9 +8,9 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+import pytest
 from homeassistant.components.calendar import CalendarEvent
 
 from custom_components.turnovercal.models import TurnoverEvent
@@ -20,10 +20,6 @@ from custom_components.turnovercal.turnover import (
     generate_uid,
 )
 
-if TYPE_CHECKING:
-    import pytest
-
-UTC = ZoneInfo("UTC")
 ET = ZoneInfo("America/New_York")
 
 UID_PATTERN = re.compile(r"^[0-9a-f]{16}@turnovercal\.homeassistant$")
@@ -422,6 +418,39 @@ class TestComputeTurnoverEdgeCases:
             timezone_str="America/New_York",
         )
         assert result[0].timezone == "America/New_York"
+
+    def test_trailing_duration_zero_rejected(self) -> None:
+        """trailing_duration_hours=0 raises ValueError."""
+        with pytest.raises(ValueError, match="trailing_duration_hours"):
+            compute_turnover_events(
+                events=[_cal("A", _dt(10, 11), _dt(12, 11))],
+                summary_prefix="Turnover",
+                property_name="Beach House",
+                trailing_duration_hours=0,
+                timezone_str="America/New_York",
+            )
+
+    def test_trailing_duration_negative_rejected(self) -> None:
+        """Negative trailing_duration_hours raises ValueError."""
+        with pytest.raises(ValueError, match="trailing_duration_hours"):
+            compute_turnover_events(
+                events=[_cal("A", _dt(10, 11), _dt(12, 11))],
+                summary_prefix="Turnover",
+                property_name="Beach House",
+                trailing_duration_hours=-1,
+                timezone_str="America/New_York",
+            )
+
+    def test_trailing_duration_over_24_rejected(self) -> None:
+        """trailing_duration_hours > 24 raises ValueError."""
+        with pytest.raises(ValueError, match="trailing_duration_hours"):
+            compute_turnover_events(
+                events=[_cal("A", _dt(10, 11), _dt(12, 11))],
+                summary_prefix="Turnover",
+                property_name="Beach House",
+                trailing_duration_hours=25,
+                timezone_str="America/New_York",
+            )
 
 
 # ---------------------------------------------------------------------------

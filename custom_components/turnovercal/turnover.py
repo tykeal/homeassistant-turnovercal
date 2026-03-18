@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from custom_components.turnovercal.models import TurnoverEvent
@@ -18,23 +18,37 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 _TRAILING_SENTINEL = "TRAILING"
+_UID_SEPARATOR = "\x00"
+_MIN_TRAILING_HOURS = 1
+_MAX_TRAILING_HOURS = 24
 
 
-def _as_datetime(value: date | datetime) -> datetime:
-    """Ensure a date-or-datetime value is a datetime.
+def _as_datetime(value: date | datetime, tz: ZoneInfo) -> datetime:
+    """Ensure a date-or-datetime value is a timezone-aware datetime.
 
-    CalendarEvent.start/end may be date or datetime; this helper
-    narrows the type for use in turnover calculations.
+    CalendarEvent.start/end may be date or datetime. All-day events
+    (plain date) are converted to midnight in the given timezone.
+
+    Raises:
+        TypeError: If value is neither date nor datetime.
+
     """
-    return cast("datetime", value)
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day, tzinfo=tz)
+    msg = f"Expected date or datetime, got {type(value).__name__}"
+    raise TypeError(msg)
 
 
 def generate_uid(checkout_id: str, checkin_id: str) -> str:
     """Generate a deterministic UID from checkout and checkin event IDs.
 
+    Uses a null-byte separator to prevent concatenation collisions.
     Produces a 16-character hex digest followed by the domain suffix.
     """
-    digest = hashlib.sha256(f"{checkout_id}{checkin_id}".encode()).hexdigest()[:16]
+    raw = f"{checkout_id}{_UID_SEPARATOR}{checkin_id}"
+    digest = hashlib.sha256(raw.encode()).hexdigest()[:16]
     return f"{digest}@turnovercal.homeassistant"
 
 
@@ -47,8 +61,13 @@ def generate_trailing_uid(checkout_id: str) -> str:
 
 
 def _source_id(event: CalendarEvent) -> str:
-    """Derive a stable source identifier from a CalendarEvent."""
-    return f"{event.summary}|{event.start.isoformat()}"
+    """Derive a stable, PII-free source identifier from a CalendarEvent.
+
+    Hashes the event summary and start time to avoid storing guest PII
+    in source identifiers while maintaining deterministic output.
+    """
+    raw = f"{event.summary}|{event.start.isoformat()}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
 def compute_turnover_events(
@@ -63,10 +82,23 @@ def compute_turnover_events(
     For N consecutive guest stays, produces up to N-1 regular turnover
     events (one between each pair) plus one trailing event after the
     last guest departs. Overlapping pairs are skipped with a warning.
+
+    Raises:
+        ValueError: If trailing_duration_hours is outside 1-24 range.
+
     """
+    if not (_MIN_TRAILING_HOURS <= trailing_duration_hours <= _MAX_TRAILING_HOURS):
+        msg = (
+            f"trailing_duration_hours must be between "
+            f"{_MIN_TRAILING_HOURS} and {_MAX_TRAILING_HOURS}, "
+            f"got {trailing_duration_hours}"
+        )
+        raise ValueError(msg)
+
     if not events:
         return []
 
+    tz = ZoneInfo(timezone_str)
     sorted_events = sorted(events, key=lambda e: e.start)
     summary = f"{summary_prefix} - {property_name}"
     result: list[TurnoverEvent] = []
@@ -75,8 +107,8 @@ def compute_turnover_events(
     for i in range(len(sorted_events) - 1):
         checkout_event = sorted_events[i]
         checkin_event = sorted_events[i + 1]
-        checkout_time = _as_datetime(checkout_event.end)
-        checkin_time = _as_datetime(checkin_event.start)
+        checkout_time = _as_datetime(checkout_event.end, tz)
+        checkin_time = _as_datetime(checkin_event.start, tz)
 
         if checkout_time > checkin_time:
             _LOGGER.warning(
@@ -106,7 +138,7 @@ def compute_turnover_events(
     # Trailing event for the last guest
     last_event = sorted_events[-1]
     src_last = _source_id(last_event)
-    last_end = _as_datetime(last_event.end)
+    last_end = _as_datetime(last_event.end, tz)
     result.append(
         TurnoverEvent(
             uid=generate_trailing_uid(src_last),

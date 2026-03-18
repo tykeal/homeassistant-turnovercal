@@ -120,9 +120,23 @@ class TestTurnoverEventValidation:
 
     def test_uid_must_end_with_domain(self) -> None:
         """UID must end with @turnovercal.homeassistant."""
-        with pytest.raises(ValueError, match=r"@turnovercal\.homeassistant"):
+        with pytest.raises(ValueError, match="pattern"):
             TurnoverEvent(
                 uid="bad-uid-no-domain",
+                summary="Turnover - Beach House",
+                dtstart=datetime(2026, 3, 10, 11, 0, tzinfo=ET),
+                dtend=datetime(2026, 3, 10, 15, 0, tzinfo=ET),
+                timezone="America/New_York",
+                source_checkout_id="rc-001",
+                source_checkin_id="rc-002",
+                created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+            )
+
+    def test_uid_rejects_non_hex_prefix(self) -> None:
+        """UID prefix must be exactly 16 hex characters."""
+        with pytest.raises(ValueError, match="pattern"):
+            TurnoverEvent(
+                uid="ZZZZZZZZZZZZZZZZ@turnovercal.homeassistant",
                 summary="Turnover - Beach House",
                 dtstart=datetime(2026, 3, 10, 11, 0, tzinfo=ET),
                 dtend=datetime(2026, 3, 10, 15, 0, tzinfo=ET),

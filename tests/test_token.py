@@ -72,6 +72,20 @@ class TestValidateToken:
         """validate_token rejects both tokens being empty."""
         assert validate_token("", "") is False
 
+    def test_rejects_none_provided(self) -> None:
+        """validate_token rejects None as provided token."""
+        stored = generate_token()
+        assert validate_token(stored, None) is False
+
+    def test_rejects_none_stored(self) -> None:
+        """validate_token rejects None as stored token."""
+        provided = generate_token()
+        assert validate_token(None, provided) is False
+
+    def test_rejects_both_none(self) -> None:
+        """validate_token rejects both tokens being None."""
+        assert validate_token(None, None) is False
+
     def test_uses_constant_time_comparison(self) -> None:
         """validate_token uses hmac.compare_digest for timing safety."""
         with patch.object(

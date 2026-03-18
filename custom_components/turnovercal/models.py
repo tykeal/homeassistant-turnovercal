@@ -5,9 +5,12 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
+
+_UID_PATTERN = re.compile(r"^[0-9a-f]{16}@turnovercal\.homeassistant$")
 
 
 class TurnoverEvent:
@@ -53,8 +56,11 @@ class TurnoverEvent:
         Raises ValueError if UID format is invalid or dtstart > dtend.
         Promotes dtend to dtstart + 1 minute when dtstart == dtend.
         """
-        if not uid.endswith("@turnovercal.homeassistant"):
-            msg = "UID must end with @turnovercal.homeassistant"
+        if not _UID_PATTERN.match(uid):
+            msg = (
+                "UID must match {hex16}@turnovercal.homeassistant "
+                f"pattern, got '{uid}'"
+            )
             raise ValueError(msg)
 
         if dtstart == dtend:

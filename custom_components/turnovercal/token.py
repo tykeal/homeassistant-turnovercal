@@ -14,11 +14,11 @@ def generate_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def validate_token(stored_token: str, provided_token: str) -> bool:
+def validate_token(stored_token: str | None, provided_token: str | None) -> bool:
     """Validate a provided token against the stored token.
 
     Uses constant-time comparison to prevent timing attacks.
-    Returns False if either token is empty.
+    Returns False if either token is empty or None.
     """
     if not stored_token or not provided_token:
         return False
