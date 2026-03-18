@@ -341,7 +341,8 @@ class TestCoordinatorModifiedEvents:
         )
 
         await coordinator._async_update_data()  # noqa: SLF001
-        _first_add_count = cache.async_add_event.call_count
+        first_add_count = cache.async_add_event.call_count
+        assert first_add_count >= 1
 
         # Second update with modified events (different times)
         events_v2 = [
