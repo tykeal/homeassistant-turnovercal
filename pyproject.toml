@@ -48,4 +48,4 @@ fail-under = 100
 verbose = 2
 
 [tool.codespell]
-ignore-words-list = "hass"
+ignore-words-list = "hass,checkin"
