@@ -1,9 +1,14 @@
+---
+description: Development guidelines and conventions for the TurnoverCal Home Assistant integration.
+applyTo: '**'
+---
+
 <!--
 SPDX-FileCopyrightText: 2026 Andrew Grimberg <tykeal@bardicgrove.org>
 SPDX-License-Identifier: MIT
 -->
 
-# turnovercal Development Guidelines
+# TurnoverCal Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-03-16
 
