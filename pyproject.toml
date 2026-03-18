@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: 2026 Andrew Grimberg <tykeal@bardicgrove.org>
+# SPDX-License-Identifier: Apache-2.0
+
+[project]
+name = "homeassistant-turnovercal"
+version = "0.0.0"
+requires-python = ">=3.13.2"
+dependencies = [
+    "homeassistant>=2026.2.0",
+    "icalendar>=6.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-homeassistant-custom-component>=0.13",
+    "pytest-aiohttp>=1.0",
+    "pytest-cov>=6.0",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["D203", "D213", "COM812", "ISC001"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+
+[tool.interrogate]
+ignore-init-method = false
+ignore-init-module = false
+fail-under = 100
+verbose = 2
+
+[tool.codespell]
+ignore-words-list = "hass"

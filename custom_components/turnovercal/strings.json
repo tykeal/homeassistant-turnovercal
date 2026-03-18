@@ -1,0 +1,50 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up TurnoverCal",
+        "description": "Configure a TurnoverCal instance to generate turnover calendars from a Rental Control calendar.",
+        "data": {
+          "calendar_entity_id": "Rental Control calendar entity",
+          "lock_monitoring": "Enable lock monitoring",
+          "cleaning_code_slot": "Cleaning code slot number"
+        },
+        "data_description": {
+          "calendar_entity_id": "The Rental Control calendar entity to monitor for guest events.",
+          "lock_monitoring": "Monitor a Keymaster-managed lock for cleaning code slot changes.",
+          "cleaning_code_slot": "The lock code slot number assigned to the cleaning crew."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "TurnoverCal Options",
+        "description": "Adjust TurnoverCal settings.",
+        "data": {
+          "retention_weeks": "Retention weeks",
+          "summary_prefix": "Summary prefix",
+          "property_name": "Property name",
+          "trailing_duration_hours": "Trailing duration (hours)",
+          "early_unlock_grace_hours": "Early unlock grace (hours)",
+          "update_interval": "Update interval (minutes)",
+          "lock_entity_id": "Lock entity",
+          "cleaning_code_slot": "Cleaning code slot number",
+          "lock_monitoring": "Enable lock monitoring"
+        },
+        "data_description": {
+          "retention_weeks": "Number of weeks to retain past turnover events.",
+          "summary_prefix": "Prefix added to turnover calendar event summaries.",
+          "property_name": "Name of the property for event descriptions.",
+          "trailing_duration_hours": "Hours after checkout to extend the turnover window.",
+          "early_unlock_grace_hours": "Hours before check-in to unlock the door early.",
+          "update_interval": "Minutes between calendar update checks.",
+          "lock_entity_id": "The lock entity managed by Keymaster.",
+          "cleaning_code_slot": "The lock code slot number assigned to the cleaning crew.",
+          "lock_monitoring": "Monitor a Keymaster-managed lock for cleaning code slot changes."
+        }
+      }
+    }
+  }
+}

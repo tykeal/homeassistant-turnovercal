@@ -40,12 +40,12 @@ independent implementation and testing of each story.
 
 <!-- markdownlint-disable MD013 -->
 
-- [ ] T001 Create `custom_components/turnovercal/` directory and empty `__init__.py`
-- [ ] T002 Create `custom_components/turnovercal/manifest.json` with domain `turnovercal`, dependencies `["rental_control"]`, `iot_class: "local_polling"`, `icalendar` requirement, and HA version pin `2026.2.0`
-- [ ] T003 [P] Create `custom_components/turnovercal/const.py` with domain name, config keys (`CONF_CALENDAR_ENTITY`, `CONF_LOCK_ENTITY`, `CONF_CLEANING_CODE_SLOT`, `CONF_RETENTION_WEEKS`, `CONF_SUMMARY_PREFIX`, `CONF_PROPERTY_NAME`, `CONF_TRAILING_DURATION_HOURS`, `CONF_EARLY_UNLOCK_GRACE_HOURS`, `CONF_UPDATE_INTERVAL`, `CONF_LOCK_MONITORING`), defaults, and event constants (`EVENT_KEYMASTER`)
-- [ ] T004 [P] Create `custom_components/turnovercal/strings.json` and `custom_components/turnovercal/translations/en.json` with config flow UI strings for setup and options steps
-- [ ] T005 [P] Create `tests/conftest.py` with shared pytest fixtures: mock HA instance, mock Rental Control calendar entity with configurable events, mock Keymaster event payloads, helper to build `CalendarEvent` objects
-- [ ] T006 [P] Create `pyproject.toml` (or update if it already exists) to add `pytest-homeassistant-custom-component`, `pytest-aiohttp`, and `pytest-cov` as dev dependencies; run `uv sync`
+- [X] T001 Create `custom_components/turnovercal/` directory and empty `__init__.py`
+- [X] T002 Create `custom_components/turnovercal/manifest.json` with domain `turnovercal`, dependencies `["rental_control"]`, `iot_class: "local_polling"`, `icalendar` requirement, and HA version pin `2026.2.0`
+- [X] T003 [P] Create `custom_components/turnovercal/const.py` with domain name, config keys (`CONF_CALENDAR_ENTITY`, `CONF_LOCK_ENTITY`, `CONF_CLEANING_CODE_SLOT`, `CONF_RETENTION_WEEKS`, `CONF_SUMMARY_PREFIX`, `CONF_PROPERTY_NAME`, `CONF_TRAILING_DURATION_HOURS`, `CONF_EARLY_UNLOCK_GRACE_HOURS`, `CONF_UPDATE_INTERVAL`, `CONF_LOCK_MONITORING`), defaults, and event constants (`EVENT_KEYMASTER`)
+- [X] T004 [P] Create `custom_components/turnovercal/strings.json` and `custom_components/turnovercal/translations/en.json` with config flow UI strings for setup and options steps
+- [X] T005 [P] Create `tests/conftest.py` with shared pytest fixtures: mock Rental Control calendar entity, mock Keymaster event payloads, helper to build `CalendarEvent` objects
+- [X] T006 [P] Create `pyproject.toml` (or update if it already exists) to add `pytest-homeassistant-custom-component`, `pytest-aiohttp`, and `pytest-cov` as dev dependencies; run `uv sync`
 
 <!-- markdownlint-enable MD013 -->
 
