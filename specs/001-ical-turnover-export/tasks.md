@@ -64,17 +64,17 @@ is complete.
 
 ### Tests for Foundational Phase (RED first)
 
-- [ ] T007 Write unit tests for `TurnoverEvent` dataclass in `tests/test_models.py` — construction, validation (dtstart < dtend), zero-duration promotion (dtend = dtstart + 1 min), UID stability, serialization round-trip (to_dict / from_dict), trailing event flag, `summary` PII exclusion
-- [ ] T008 Write unit tests for `CachedEventStore` dataclass in `tests/test_models.py` — construction, add/remove events, lookup by UID, version field, `feed_token` field, `last_cleanup` field
-- [ ] T009 Write unit tests for turnover calculation in `tests/test_turnover.py` — consecutive pair produces correct dtstart/dtend, multi-day gap, zero-gap (1-min promotion), negative overlap (no event + warning), single trailing event (configurable duration), trailing event replaced when new guest added, multiple consecutive guests produce N-1 events, empty calendar produces no events
-- [ ] T010 Write unit tests for UID generation in `tests/test_turnover.py` — deterministic SHA-256 hex (first 16 chars) with `@turnovercal.homeassistant` suffix, same inputs produce same UID, different inputs produce different UIDs, trailing UID uses sentinel, one-way (source IDs not recoverable)
-- [ ] T011 [P] Write unit tests for token generation and validation in `tests/test_token.py` — `generate_token()` returns 43-char URL-safe base64, `validate_token()` uses constant-time comparison, invalid tokens rejected, empty/None tokens rejected
+- [X] T007 Write unit tests for `TurnoverEvent` dataclass in `tests/test_models.py` — construction, validation (dtstart < dtend), zero-duration promotion (dtend = dtstart + 1 min), UID stability, serialization round-trip (to_dict / from_dict), trailing event flag, `summary` PII exclusion
+- [X] T008 Write unit tests for `CachedEventStore` dataclass in `tests/test_models.py` — construction, add/remove events, lookup by UID, version field, `feed_token` field, `last_cleanup` field
+- [X] T009 Write unit tests for turnover calculation in `tests/test_turnover.py` — consecutive pair produces correct dtstart/dtend, multi-day gap, zero-gap (1-min promotion), negative overlap (no event + warning), single trailing event (configurable duration), trailing event replaced when new guest added, multiple consecutive guests produce N-1 events, empty calendar produces no events
+- [X] T010 Write unit tests for UID generation in `tests/test_turnover.py` — deterministic SHA-256 hex (first 16 chars) with `@turnovercal.homeassistant` suffix, same inputs produce same UID, different inputs produce different UIDs, trailing UID uses sentinel, one-way (source IDs not recoverable)
+- [X] T011 [P] Write unit tests for token generation and validation in `tests/test_token.py` — `generate_token()` returns 43-char URL-safe base64, `validate_token()` uses constant-time comparison, invalid tokens rejected, empty/None tokens rejected
 
 ### Implementation for Foundational Phase (GREEN)
 
-- [ ] T012 [P] Implement `TurnoverEvent` and `CachedEventStore` dataclasses in `custom_components/turnovercal/models.py` with `to_dict()` / `from_dict()` serialization, naive-local-time storage convention for dtstart/dtend, UTC with offset for created_at/lock_unlock_time, all fields per data-model.md
-- [ ] T013 [P] Implement `generate_uid()`, `generate_trailing_uid()`, and `compute_turnover_events()` in `custom_components/turnovercal/turnover.py` — pure functions taking a sorted list of `CalendarEvent` objects and config (trailing duration, timezone), returning list of `TurnoverEvent`; handles zero-gap, negative overlap, trailing events per FR-002/FR-010/FR-011/FR-012/FR-016
-- [ ] T014 [P] Implement `generate_token()` and `validate_token()` in `custom_components/turnovercal/token.py` using `secrets.token_urlsafe(32)` and `hmac.compare_digest()`
+- [X] T012 [P] Implement `TurnoverEvent` and `CachedEventStore` dataclasses in `custom_components/turnovercal/models.py` with `to_dict()` / `from_dict()` serialization, naive-local-time storage convention for dtstart/dtend, UTC with offset for created_at/lock_unlock_time, all fields per data-model.md
+- [X] T013 [P] Implement `generate_uid()`, `generate_trailing_uid()`, and `compute_turnover_events()` in `custom_components/turnovercal/turnover.py` — pure functions taking a sorted list of `CalendarEvent` objects and config (trailing duration, timezone), returning list of `TurnoverEvent`; handles zero-gap, negative overlap, trailing events per FR-002/FR-010/FR-011/FR-012/FR-016
+- [X] T014 [P] Implement `generate_token()` and `validate_token()` in `custom_components/turnovercal/token.py` using `secrets.token_urlsafe(32)` and `hmac.compare_digest()`
 
 <!-- markdownlint-enable MD013 -->
 
