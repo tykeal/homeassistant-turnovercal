@@ -111,6 +111,16 @@ def compute_turnover_events(
     result: list[TurnoverEvent] = []
     now_utc = datetime.now(tz=ZoneInfo("UTC"))
 
+    # Cache source IDs to avoid redundant hashing
+    sid_cache: dict[int, str] = {}
+
+    def _cached_source_id(event: CalendarEvent) -> str:
+        """Return cached source ID for a CalendarEvent."""
+        eid = id(event)
+        if eid not in sid_cache:
+            sid_cache[eid] = _source_id(event, tz)
+        return sid_cache[eid]
+
     for i in range(len(sorted_events) - 1):
         checkout_event = sorted_events[i]
         checkin_event = sorted_events[i + 1]
@@ -120,13 +130,13 @@ def compute_turnover_events(
         if checkout_time > checkin_time:
             _LOGGER.warning(
                 "Overlap detected between events %s and %s; skipping pair",
-                _source_id(checkout_event, tz)[:8],
-                _source_id(checkin_event, tz)[:8],
+                _cached_source_id(checkout_event)[:8],
+                _cached_source_id(checkin_event)[:8],
             )
             continue
 
-        src_checkout = _source_id(checkout_event, tz)
-        src_checkin = _source_id(checkin_event, tz)
+        src_checkout = _cached_source_id(checkout_event)
+        src_checkin = _cached_source_id(checkin_event)
 
         result.append(
             TurnoverEvent(
@@ -144,7 +154,7 @@ def compute_turnover_events(
 
     # Trailing event for the last guest
     last_event = sorted_events[-1]
-    src_last = _source_id(last_event, tz)
+    src_last = _cached_source_id(last_event)
     last_end = _as_datetime(last_event.end, tz)
     result.append(
         TurnoverEvent(

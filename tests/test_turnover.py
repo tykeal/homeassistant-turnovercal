@@ -194,10 +194,10 @@ class TestComputeTurnoverEvents:
         assert len(regular) == 1
         assert regular[0].dtend == same_time + timedelta(minutes=1)
 
-    def test_negative_overlap_no_event_warning_logged(
+    def test_negative_overlap_no_regular_event_warning_logged(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Negative overlap (checkout > checkin) produces no event + warning."""
+        """Overlap skips the regular event and logs a warning."""
         events = [
             _cal("A", _dt(10, 11), _dt(13, 11)),
             _cal("B", _dt(12, 15), _dt(15, 11)),
@@ -212,6 +212,8 @@ class TestComputeTurnoverEvents:
             )
         regular = [e for e in result if not e.is_trailing]
         assert len(regular) == 0
+        trailing = [e for e in result if e.is_trailing]
+        assert len(trailing) == 1
         assert any("overlap" in msg.lower() for msg in caplog.messages)
         # Log must use hashed IDs, not raw event summaries (PII)
         overlap_msgs = [m for m in caplog.messages if "overlap" in m.lower()]
