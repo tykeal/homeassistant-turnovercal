@@ -72,7 +72,7 @@ is complete.
 
 ### Implementation for Foundational Phase (GREEN)
 
-- [X] T012 [P] Implement `TurnoverEvent` and `CachedEventStore` dataclasses in `custom_components/turnovercal/models.py` with `to_dict()` / `from_dict()` serialization, naive-local-time storage convention for dtstart/dtend, UTC with offset for created_at/lock_unlock_time, all fields per data-model.md
+- [X] T012 [P] Implement `TurnoverEvent` and `CachedEventStore` classes in `custom_components/turnovercal/models.py` with `to_dict()` / `from_dict()` serialization, naive-local-time storage convention for dtstart/dtend, UTC with offset for created_at/lock_unlock_time, all fields per data-model.md
 - [X] T013 [P] Implement `generate_uid()`, `generate_trailing_uid()`, and `compute_turnover_events()` in `custom_components/turnovercal/turnover.py` — pure functions taking a sorted list of `CalendarEvent` objects and config (trailing duration, timezone), returning list of `TurnoverEvent`; handles zero-gap, negative overlap, trailing events per FR-002/FR-010/FR-011/FR-012/FR-016
 - [X] T014 [P] Implement `generate_token()` and `validate_token()` in `custom_components/turnovercal/token.py` using `secrets.token_urlsafe(32)` and `hmac.compare_digest()`
 
