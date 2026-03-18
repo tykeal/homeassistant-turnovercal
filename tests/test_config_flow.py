@@ -221,10 +221,28 @@ class TestConfigFlowLockMonitoring:
         assert result["errors"] is not None
         assert CONF_CLEANING_CODE_SLOT in result["errors"]
 
+    async def test_lock_monitoring_negative_slot_rejected(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Lock monitoring with negative code slot shows error."""
+        _register_calendar(hass)
 
-# ---------------------------------------------------------------------------
-# Config flow - duplicate and invalid entity rejection
-# ---------------------------------------------------------------------------
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_CALENDAR_ENTITY: ("calendar.rental_control_beach_house"),
+                CONF_LOCK_MONITORING: True,
+                CONF_CLEANING_CODE_SLOT: -1,
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_CLEANING_CODE_SLOT in result["errors"]
 
 
 class TestConfigFlowValidation:
