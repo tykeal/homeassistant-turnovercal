@@ -65,13 +65,15 @@ def generate_trailing_uid(checkout_id: str) -> str:
     return generate_uid(checkout_id, _TRAILING_SENTINEL)
 
 
-def _source_id(event: CalendarEvent) -> str:
+def _source_id(event: CalendarEvent, tz: ZoneInfo) -> str:
     """Derive a stable, PII-free source identifier from a CalendarEvent.
 
-    Hashes the event summary and start time to avoid storing guest PII
-    in source identifiers while maintaining deterministic output.
+    Hashes the event summary and normalized start/end times to avoid
+    storing guest PII and ensure timezone-independent stability.
     """
-    raw = f"{event.summary}|{event.start.isoformat()}"
+    start = _as_datetime(event.start, tz)
+    end = _as_datetime(event.end, tz)
+    raw = f"{event.summary}|{start.isoformat()}|{end.isoformat()}"
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
@@ -118,13 +120,13 @@ def compute_turnover_events(
         if checkout_time > checkin_time:
             _LOGGER.warning(
                 "Overlap detected between events %s and %s; skipping pair",
-                _source_id(checkout_event)[:8],
-                _source_id(checkin_event)[:8],
+                _source_id(checkout_event, tz)[:8],
+                _source_id(checkin_event, tz)[:8],
             )
             continue
 
-        src_checkout = _source_id(checkout_event)
-        src_checkin = _source_id(checkin_event)
+        src_checkout = _source_id(checkout_event, tz)
+        src_checkin = _source_id(checkin_event, tz)
 
         result.append(
             TurnoverEvent(
@@ -142,7 +144,7 @@ def compute_turnover_events(
 
     # Trailing event for the last guest
     last_event = sorted_events[-1]
-    src_last = _source_id(last_event)
+    src_last = _source_id(last_event, tz)
     last_end = _as_datetime(last_event.end, tz)
     result.append(
         TurnoverEvent(
