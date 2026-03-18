@@ -21,8 +21,8 @@ Represents a cleaning window between two consecutive guest stays.
 | --- | --- | --- | --- |
 | uid | `str` | Deterministic event identifier | Truncated SHA-256 hex digest of source event IDs (first 16 chars); format `{hex16}@turnovercal.homeassistant`; immutable across recalculations |
 | summary | `str` | Event title for iCal feed | Must not contain guest PII (FR-014); format: `"{prefix} - {property_name}"` |
-| dtstart | `datetime` | Turnover window start (guest checkout) | Timezone-aware; sourced from departing guest event `end` |
-| dtend | `datetime` | Turnover window end (next guest check-in) | Timezone-aware; sourced from arriving guest event `start`; may be adjusted by lock event |
+| dtstart | `datetime` | Turnover window start (guest checkout) | TZ-aware in memory, naive local in JSON (see Serialization Format); sourced from departing guest event `end` |
+| dtend | `datetime` | Turnover window end (next guest check-in) | TZ-aware in memory, naive local in JSON (see Serialization Format); sourced from arriving guest event `start`; may be adjusted by lock event |
 | timezone | `str` | IANA timezone identifier | From HA configured local timezone; used for VTIMEZONE generation |
 | source_checkout_id | `str` | Identifier of the departing guest event | Used for UID generation and event correlation |
 | source_checkin_id | `str \| None` | Identifier of the arriving guest event | `None` for trailing turnover events; used for UID generation and event correlation |
@@ -71,12 +71,16 @@ Represents a cleaning window between two consecutive guest stays.
 
 Persistent storage wrapper for turnover events.
 
+<!-- markdownlint-disable MD013 -->
+
 | Field | Type | Description | Constraints |
 | --- | --- | --- | --- |
 | version | `int` | Storage schema version | Currently `1`; used for migration |
 | events | `dict[str, TurnoverEvent]` | UID → event map | O(1) lookup by UID |
 | last_cleanup | `datetime` | Last expiry cleanup timestamp | UTC |
-| feed_token | `str` | Secret iCal URL token | Via `secrets.token_urlsafe(32)` |
+| feed_token | `str` | Secret iCal URL token (mirror) | Mirrored from ConfigEntryData on load; not authoritative — regeneration updates ConfigEntryData first |
+
+<!-- markdownlint-enable MD013 -->
 
 **Retention rules**:
 
@@ -98,7 +102,7 @@ Data captured during the config flow setup step.
 | has_keymaster | `bool` | Whether Keymaster lock is associated | Auto-detected from Rental Control config |
 | lock_entity_id | `str \| None` | Keymaster lock entity | Required if `has_keymaster` is `True` |
 | cleaning_code_slot | `int \| None` | Keymaster code slot for cleaning staff | Required if `has_keymaster` is `True`; the dedicated permanent slot used by cleaners |
-| feed_token | `str` | Secret URL token | Generated at setup; stored encrypted |
+| feed_token | `str` | Secret URL token (canonical source) | Generated at setup; stored in config entry data; mirrored to CachedEventStore on load |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -112,6 +116,7 @@ User-adjustable settings via the options flow.
 | --- | --- | --- | --- |
 | retention_weeks | `int` | How long to keep past events | Default: 6; range: 1–52 |
 | summary_prefix | `str` | Prefix for turnover event summaries | Default: `"Turnover"` |
+| property_name | `str` | Property identifier for summaries and calendar name | Default: derived from RC calendar entity friendly name (strip `"Rental Control "` prefix); user-editable via options flow |
 | lock_monitoring | `bool` | Enable Keymaster lock monitoring | Default: `True` if lock available |
 | cleaning_code_slot | `int \| None` | Keymaster code slot for cleaning staff | Changeable via options; must match the permanent slot assigned to cleaners in Keymaster |
 | trailing_duration_hours | `int` | Duration (hours) for trailing turnover events | Default: 4; range: 1–24 (FR-016) |

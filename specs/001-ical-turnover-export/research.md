@@ -197,7 +197,8 @@ class TurnoverCalView(HomeAssistantView):
 **Security requirements**:
 
 - Token generated via `secrets.token_urlsafe(32)` (FR-003)
-- Token stored in config entry data (encrypted by HA)
+- Token stored in config entry data (persisted by HA in
+  `.storage/core.config_entries`; not separately encrypted)
 - Token revocable/regenerable via options flow
 - Token redacted from logs via HA's built-in sensitive data handling
 
@@ -314,7 +315,11 @@ via the options flow so users can adjust without reconfiguring.
 
 1. Select Rental Control calendar entity (entity picker)
 2. Auto-detect if Keymaster lock is associated with the selected
-   calendar (from Rental Control's config)
+   calendar: query the Rental Control config entry's data for a
+   `lock_entity` or `lock_name` field; if present, look up the
+   corresponding Keymaster config entry to confirm it is loaded.
+   If no lock field exists in the RC config, set
+   `has_keymaster=False` and skip lock-related setup steps.
 3. If lock detected, ask whether to enable lock monitoring
 4. If lock monitoring enabled, ask for the cleaning staff code
    slot number (integer input — this is the permanent Keymaster
@@ -327,7 +332,7 @@ via the options flow so users can adjust without reconfiguring.
 - Early-unlock grace period (default: 2 hours, range: 0–12 hours)
 - Event summary prefix (default: "Turnover")
 - URL path prefix (optional, does not replace token)
-- Regenerate feed token (button)
+- Regenerate feed token (boolean selector → confirmation step)
 - Lock monitoring toggle (if Keymaster available)
 - Cleaning staff code slot (if lock monitoring enabled)
 
@@ -353,6 +358,10 @@ transitions. A `DataUpdateCoordinator` with a configurable update
 interval (default: 5 minutes) periodically fetches the full event
 list via the calendar platform's `async_get_events()` API to detect
 new, modified, or removed events and recalculate turnover windows.
+The query window spans from 7 days in the past to 365 days in the
+future: the past window covers recently completed turnovers for
+cache reconciliation, and the future window matches Rental
+Control's default event horizon.
 
 **Alternatives considered**:
 

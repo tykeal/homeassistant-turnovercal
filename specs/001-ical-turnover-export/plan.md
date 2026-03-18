@@ -52,7 +52,7 @@ design.*
 | III. UX Consistency | ✅ PASS | RFC 5545 compliance explicit in FR-004; sensible defaults (6-week retention, auto-generated URL) |
 | IV. Performance | ✅ PASS | 2-second response target (SC-008); async-only I/O; no event loop blocking |
 | V. Atomic Commits | ✅ PASS | Pre-commit hooks active; DCO sign-off required; SPDX headers in REUSE.toml |
-| VI. Phased Development | ✅ PASS | Three user stories map to P1→P2→P3 phases with independent test gates |
+| VI. Phased Development | ✅ PASS | Four user stories map to P1→P2→P3 phases with independent test gates |
 | Language & Runtime | ✅ PASS | Python 3.13+, full type annotations |
 | Dependency Management | ✅ PASS | uv with uv.lock |
 | License Compliance | ✅ PASS | REUSE spec; Apache-2.0 for source |
