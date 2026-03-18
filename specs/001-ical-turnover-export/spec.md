@@ -253,6 +253,15 @@ identically to a Keymaster unlock scenario.
   is later added after this checkout, the trailing event MUST be
   replaced by a standard turnover event spanning checkout to the
   new guest's check-in.
+- What happens when a future guest event is cancelled in Rental
+  Control? TurnoverCal MUST remove any turnover events that
+  reference the cancelled guest and recalculate turnover windows
+  from the updated event list. For example, if Guest B between
+  Guest A and Guest C is cancelled, the two adjacent turnovers
+  (A→B and B→C) MUST be replaced by a single turnover (A→C).
+  Only future turnovers (DTEND in the future) are subject to
+  recalculation; past turnovers are preserved per the caching
+  policy (FR-005).
 
 ## Requirements *(mandatory)*
 
@@ -318,7 +327,10 @@ identically to a Keymaster unlock scenario.
   the unlock day per RFC 5545 non-inclusive DTEND semantics.
 - **FR-010**: TurnoverCal MUST update existing turnover events
   when the underlying guest events are modified in Rental
-  Control (time changes, cancellations). Each turnover event
+  Control (time changes, cancellations). For cancellations,
+  only future turnovers (DTEND in the future) are subject to
+  recalculation; past turnovers are preserved per the caching
+  policy (FR-005). Each turnover event
   MUST have a stable, deterministic UID preserved across
   recalculations and Keymaster adjustments, to prevent calendar
   clients from showing duplicates. The UID MUST be derived
@@ -362,6 +374,26 @@ identically to a Keymaster unlock scenario.
   service provides a fallback for properties without Keymaster,
   for cases where lock events fail to fire, and for manual
   override scenarios.
+
+### Non-Functional Requirements
+
+- **NFR-001 (Performance)**: The iCal feed endpoint MUST
+  respond within 2 seconds under typical load (SC-008).
+  Asynchronous operations MUST NOT block the Home Assistant
+  event loop; blocking calls MUST be offloaded to executor
+  threads.
+- **NFR-002 (Availability)**: TurnoverCal MUST continue
+  serving cached iCal data when Rental Control is temporarily
+  unavailable (cross-ref FR-013). The integration MUST NOT
+  crash or enter an error state due to upstream unavailability.
+- **NFR-003 (Security)**: The feed URL token MUST be generated
+  from a CSPRNG, redacted from logs and diagnostics, and
+  revocable via the options flow (cross-ref FR-003). Token
+  comparison MUST use constant-time algorithms to prevent
+  timing attacks.
+- **NFR-004 (Compatibility)**: The iCal feed MUST be
+  consumable without modification by Google Calendar, Apple
+  Calendar, and Microsoft Outlook (cross-ref SC-003, FR-004).
 
 ### Key Entities
 
