@@ -13,6 +13,7 @@ from homeassistant.config_entries import (
     ConfigFlow,
     OptionsFlow,
 )
+from homeassistant.helpers import entity_registry as er
 
 from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
@@ -59,8 +60,9 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
             if not entity_id.startswith("calendar."):
                 errors[CONF_CALENDAR_ENTITY] = "invalid_entity"
             else:
-                state = self.hass.states.get(entity_id)
-                if state is None:
+                registry = er.async_get(self.hass)
+                entry = registry.async_get(entity_id)
+                if entry is None:
                     errors[CONF_CALENDAR_ENTITY] = "invalid_entity"
 
             if not errors:

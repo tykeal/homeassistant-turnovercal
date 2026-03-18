@@ -56,7 +56,7 @@ async def async_setup_entry(
 
     options = entry.options
     summary_prefix = options.get(CONF_SUMMARY_PREFIX, DEFAULT_SUMMARY_PREFIX)
-    property_name = options.get(CONF_PROPERTY_NAME, "")
+    property_name = options.get(CONF_PROPERTY_NAME, "") or entry.title
     trailing_hours = options.get(
         CONF_TRAILING_DURATION_HOURS,
         DEFAULT_TRAILING_DURATION_HOURS,
