@@ -457,6 +457,28 @@ class TestComputeTurnoverEdgeCases:
                 timezone_str="America/New_York",
             )
 
+    def test_cross_timezone_normalization(self) -> None:
+        """Events in a different tz are normalized to configured tz."""
+        pacific = ZoneInfo("America/Los_Angeles")
+        # 11:00 Pacific = 14:00 Eastern
+        events = [
+            CalendarEvent(
+                start=datetime(2026, 3, 10, 11, 0, tzinfo=pacific),
+                end=datetime(2026, 3, 12, 11, 0, tzinfo=pacific),
+                summary="Guest",
+            ),
+        ]
+        result = compute_turnover_events(
+            events=events,
+            summary_prefix="Turnover",
+            property_name="Beach House",
+            trailing_duration_hours=4,
+            timezone_str="America/New_York",
+        )
+        # Trailing event starts at checkout time in Eastern
+        assert result[0].dtstart.tzinfo == ET
+        assert result[0].dtstart.hour == 14
+
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -39,7 +39,7 @@ def _as_datetime(value: date | datetime, tz: ZoneInfo) -> datetime:
         if value.tzinfo is None:
             msg = "Naive datetime not allowed; expected tz-aware"
             raise ValueError(msg)
-        return value
+        return value.astimezone(tz)
     if isinstance(value, date):
         return datetime(value.year, value.month, value.day, tzinfo=tz)
     msg = f"Expected date or datetime, got {type(value).__name__}"
