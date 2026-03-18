@@ -52,7 +52,7 @@ async def async_setup_entry(
 
     entity_id = entry.data[CONF_CALENDAR_ENTITY]
     feed_token = entry.data["feed_token"]
-    tz_str = hass.config.time_zone
+    tz_str = hass.config.time_zone or "UTC"
 
     options = entry.options
     summary_prefix = options.get(CONF_SUMMARY_PREFIX, DEFAULT_SUMMARY_PREFIX)
@@ -121,14 +121,13 @@ async def async_unload_entry(
         True if unload was successful.
 
     """
-    coordinator = (
-        hass.data[DOMAIN]
-        .get(entry.entry_id, {})
-        .get(
-            "coordinator",
-        )
+    domain_data = hass.data.get(DOMAIN)
+    if domain_data is None:
+        return True
+    coordinator = domain_data.get(entry.entry_id, {}).get(
+        "coordinator",
     )
     if coordinator is not None:
         await coordinator.async_shutdown()
-    hass.data[DOMAIN].pop(entry.entry_id, None)
+    domain_data.pop(entry.entry_id, None)
     return True

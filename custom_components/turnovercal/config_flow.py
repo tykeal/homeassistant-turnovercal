@@ -34,6 +34,44 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def _validate_input(
+        self,
+        user_input: dict[str, Any],
+    ) -> dict[str, str]:
+        """Validate user input and return errors dict.
+
+        Args:
+            user_input: The submitted form data.
+
+        Returns:
+            Dictionary of field → error key (empty if valid).
+
+        """
+        errors: dict[str, str] = {}
+        entity_id = user_input[CONF_CALENDAR_ENTITY]
+
+        if not entity_id.startswith("calendar."):
+            errors[CONF_CALENDAR_ENTITY] = "invalid_entity"
+        else:
+            registry = er.async_get(self.hass)
+            entry = registry.async_get(entity_id)
+            if entry is None:
+                errors[CONF_CALENDAR_ENTITY] = "invalid_entity"
+
+        if not errors:
+            lock_monitoring = bool(
+                user_input.get(
+                    CONF_LOCK_MONITORING,
+                    DEFAULT_LOCK_MONITORING,
+                ),
+            )
+            if lock_monitoring:
+                slot = user_input.get(CONF_CLEANING_CODE_SLOT)
+                if slot is None or slot < 1:
+                    errors[CONF_CLEANING_CODE_SLOT] = "slot_required"
+
+        return errors
+
     async def async_step_user(
         self,
         user_input: dict[str, Any] | None = None,
@@ -55,15 +93,7 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             entity_id = user_input[CONF_CALENDAR_ENTITY]
-
-            # Validate entity exists and is a calendar
-            if not entity_id.startswith("calendar."):
-                errors[CONF_CALENDAR_ENTITY] = "invalid_entity"
-            else:
-                registry = er.async_get(self.hass)
-                entry = registry.async_get(entity_id)
-                if entry is None:
-                    errors[CONF_CALENDAR_ENTITY] = "invalid_entity"
+            errors = self._validate_input(user_input)
 
             if not errors:
                 # Check for duplicate
@@ -77,15 +107,13 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
                     friendly = state.attributes.get("friendly_name", entity_id)
                 property_name = friendly.removeprefix("Rental Control ")
 
-                # Check lock monitoring preference
                 lock_monitoring = bool(
-                    user_input.get(CONF_LOCK_MONITORING),
+                    user_input.get(
+                        CONF_LOCK_MONITORING,
+                        DEFAULT_LOCK_MONITORING,
+                    ),
                 )
 
-                if lock_monitoring and user_input.get(CONF_CLEANING_CODE_SLOT) is None:
-                    errors[CONF_CLEANING_CODE_SLOT] = "slot_required"
-
-            if not errors:
                 token = generate_token()
 
                 data: dict[str, Any] = {
