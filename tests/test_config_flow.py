@@ -242,7 +242,7 @@ class TestConfigFlowLockMonitoring:
 
         assert result["type"] is FlowResultType.FORM
         assert result["errors"] is not None
-        assert CONF_CLEANING_CODE_SLOT in result["errors"]
+        assert result["errors"][CONF_CLEANING_CODE_SLOT] == "invalid_slot"
 
 
 class TestConfigFlowValidation:
