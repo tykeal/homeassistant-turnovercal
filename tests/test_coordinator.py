@@ -261,6 +261,56 @@ class TestCoordinatorRCUnavailable:
 class TestCoordinatorModifiedEvents:
     """Tests for handling modified guest events."""
 
+    async def test_compute_failure_serves_cached_data(
+        self,
+        hass: HomeAssistant,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """When compute_turnover_events fails, serve cached data."""
+        mock_entity = MagicMock()
+        mock_entity.async_get_events = AsyncMock(return_value=[])
+
+        cached_event = TurnoverEvent(
+            uid="0123456789abcdef@turnovercal.homeassistant",
+            summary="Turnover - Beach House",
+            dtstart=_dt(10, 11),
+            dtend=_dt(10, 15),
+            timezone="America/New_York",
+            source_checkout_id="src-001",
+            source_checkin_id="src-002",
+            created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+        )
+        cache = MagicMock(spec=EventCache)
+        cache.get_events.return_value = {
+            cached_event.uid: cached_event,
+        }
+        cache.async_save = AsyncMock()
+
+        coordinator = TurnoverCoordinator(
+            hass=hass,
+            calendar_entity=mock_entity,
+            cache=cache,
+            summary_prefix=DEFAULT_SUMMARY_PREFIX,
+            property_name="Beach House",
+            trailing_duration_hours=DEFAULT_TRAILING_DURATION_HOURS,
+            timezone_str="America/New_York",
+            update_interval=timedelta(
+                minutes=DEFAULT_UPDATE_INTERVAL,
+            ),
+        )
+
+        with (
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                side_effect=ValueError("bad data"),
+            ),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = await coordinator._async_update_data()  # noqa: SLF001
+
+        assert cached_event.uid in result
+        assert any("computation failed" in msg.lower() for msg in caplog.messages)
+
     async def test_modified_events_trigger_recalculation(
         self, hass: HomeAssistant
     ) -> None:

@@ -139,9 +139,7 @@ class TestConfigFlowSetup:
 class TestConfigFlowLockMonitoring:
     """Tests for lock monitoring option in config flow."""
 
-    async def test_lock_monitoring_sets_flag(
-        self, hass: HomeAssistant
-    ) -> None:
+    async def test_lock_monitoring_sets_flag(self, hass: HomeAssistant) -> None:
         """Config entry records lock_monitoring when lock enabled."""
         hass.states.async_set(
             "calendar.rental_control_beach_house",
