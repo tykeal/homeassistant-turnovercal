@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     MockModule,
@@ -57,6 +58,27 @@ def _enable_custom_integrations(
     )
 
 
+def _register_calendar(
+    hass: HomeAssistant,
+    entity_id: str = "calendar.rental_control_beach_house",
+    friendly_name: str = "Rental Control Beach House",
+) -> None:
+    """Register a calendar entity in the registry and set state."""
+    registry = er.async_get(hass)
+    object_id = entity_id.removeprefix("calendar.")
+    registry.async_get_or_create(
+        domain="calendar",
+        platform="rental_control",
+        unique_id=f"rc_{object_id}",
+        suggested_object_id=object_id,
+    )
+    hass.states.async_set(
+        entity_id,
+        "off",
+        {"friendly_name": friendly_name},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Config flow - setup step
 # ---------------------------------------------------------------------------
@@ -75,11 +97,7 @@ class TestConfigFlowSetup:
 
     async def test_step_user_creates_entry(self, hass: HomeAssistant) -> None:
         """Valid input creates a config entry."""
-        hass.states.async_set(
-            "calendar.rental_control_beach_house",
-            "off",
-            {"friendly_name": "Rental Control Beach House"},
-        )
+        _register_calendar(hass)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": SOURCE_USER}
@@ -107,11 +125,7 @@ class TestConfigFlowSetup:
 
     async def test_token_generated_on_setup(self, hass: HomeAssistant) -> None:
         """A feed token is generated during setup."""
-        hass.states.async_set(
-            "calendar.rental_control_beach_house",
-            "off",
-            {"friendly_name": "Rental Control Beach House"},
-        )
+        _register_calendar(hass)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": SOURCE_USER}
@@ -141,11 +155,7 @@ class TestConfigFlowLockMonitoring:
 
     async def test_lock_monitoring_sets_flag(self, hass: HomeAssistant) -> None:
         """Config entry records lock_monitoring when lock enabled."""
-        hass.states.async_set(
-            "calendar.rental_control_beach_house",
-            "off",
-            {"friendly_name": "Rental Control Beach House"},
-        )
+        _register_calendar(hass)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": SOURCE_USER}
@@ -169,11 +179,7 @@ class TestConfigFlowLockMonitoring:
 
     async def test_no_lock_monitoring_sets_false(self, hass: HomeAssistant) -> None:
         """Config entry records lock_monitoring=False when not set."""
-        hass.states.async_set(
-            "calendar.rental_control_beach_house",
-            "off",
-            {"friendly_name": "Rental Control Beach House"},
-        )
+        _register_calendar(hass)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": SOURCE_USER}
@@ -197,11 +203,7 @@ class TestConfigFlowLockMonitoring:
         self, hass: HomeAssistant
     ) -> None:
         """Lock monitoring without a code slot shows error."""
-        hass.states.async_set(
-            "calendar.rental_control_beach_house",
-            "off",
-            {"friendly_name": "Rental Control Beach House"},
-        )
+        _register_calendar(hass)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": SOURCE_USER}
@@ -230,11 +232,7 @@ class TestConfigFlowValidation:
 
     async def test_duplicate_calendar_rejected(self, hass: HomeAssistant) -> None:
         """Same calendar entity cannot be configured twice."""
-        hass.states.async_set(
-            "calendar.rental_control_beach_house",
-            "off",
-            {"friendly_name": "Rental Control Beach House"},
-        )
+        _register_calendar(hass)
 
         existing = MockConfigEntry(
             domain=DOMAIN,
