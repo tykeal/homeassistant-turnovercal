@@ -1,17 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Andrew Grimberg <tykeal@bardicgrove.org>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Data models for the TurnoverCal integration.
-
-Stub module: implementation pending (Phase 2).
-"""
+"""Data models for the TurnoverCal integration."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Any
+from zoneinfo import ZoneInfo
 
 
 class TurnoverEvent:
@@ -33,18 +29,141 @@ class TurnoverEvent:
     original_dtend: datetime | None
     original_dtstart: datetime | None
 
-    def __init__(self, **kwargs: Any) -> None:  # noqa: ANN401
-        """Initialize a TurnoverEvent (stub: not yet implemented)."""
-        raise NotImplementedError
+    def __init__(  # noqa: PLR0913
+        self,
+        *,
+        uid: str,
+        summary: str,
+        dtstart: datetime,
+        dtend: datetime,
+        timezone: str,
+        source_checkout_id: str,
+        source_checkin_id: str | None,
+        created_at: datetime,
+        status: str = "scheduled",
+        is_trailing: bool = False,
+        adjusted_by_lock: bool = False,
+        lock_unlock_time: datetime | None = None,
+        adjustment_source: str | None = None,
+        original_dtend: datetime | None = None,
+        original_dtstart: datetime | None = None,
+    ) -> None:
+        """Initialize a TurnoverEvent with validation.
+
+        Raises ValueError if UID format is invalid or dtstart > dtend.
+        Promotes dtend to dtstart + 1 minute when dtstart == dtend.
+        """
+        if not uid.endswith("@turnovercal.homeassistant"):
+            msg = "UID must end with @turnovercal.homeassistant"
+            raise ValueError(msg)
+
+        if dtstart == dtend:
+            dtend = dtstart + timedelta(minutes=1)
+
+        if dtstart > dtend:
+            msg = "dtstart must be before dtend"
+            raise ValueError(msg)
+
+        self.uid = uid
+        self.summary = summary
+        self.dtstart = dtstart
+        self.dtend = dtend
+        self.timezone = timezone
+        self.source_checkout_id = source_checkout_id
+        self.source_checkin_id = source_checkin_id
+        self.created_at = created_at
+        self.status = status
+        self.is_trailing = is_trailing
+        self.adjusted_by_lock = adjusted_by_lock
+        self.lock_unlock_time = lock_unlock_time
+        self.adjustment_source = adjustment_source
+        self.original_dtend = original_dtend
+        self.original_dtstart = original_dtstart
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize this event to a JSON-compatible dict."""
-        raise NotImplementedError
+        """Serialize this event to a JSON-compatible dict.
+
+        Local datetimes (dtstart, dtend, original_dtstart, original_dtend)
+        are stored as naive ISO strings. UTC datetimes (created_at,
+        lock_unlock_time) are stored with +00:00 offset.
+        """
+        return {
+            "uid": self.uid,
+            "summary": self.summary,
+            "dtstart": self.dtstart.replace(tzinfo=None).isoformat(),
+            "dtend": self.dtend.replace(tzinfo=None).isoformat(),
+            "timezone": self.timezone,
+            "source_checkout_id": self.source_checkout_id,
+            "source_checkin_id": self.source_checkin_id,
+            "created_at": self.created_at.isoformat(),
+            "status": self.status,
+            "is_trailing": self.is_trailing,
+            "adjusted_by_lock": self.adjusted_by_lock,
+            "lock_unlock_time": (
+                self.lock_unlock_time.isoformat()
+                if self.lock_unlock_time is not None
+                else None
+            ),
+            "adjustment_source": self.adjustment_source,
+            "original_dtend": (
+                self.original_dtend.replace(tzinfo=None).isoformat()
+                if self.original_dtend is not None
+                else None
+            ),
+            "original_dtstart": (
+                self.original_dtstart.replace(tzinfo=None).isoformat()
+                if self.original_dtstart is not None
+                else None
+            ),
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TurnoverEvent:
-        """Deserialize a TurnoverEvent from a dict."""
-        raise NotImplementedError
+        """Deserialize a TurnoverEvent from a dict.
+
+        Parses naive local ISO strings back into timezone-aware datetimes
+        using the stored timezone field.
+        """
+        tz = ZoneInfo(data["timezone"])
+
+        dtstart = datetime.fromisoformat(data["dtstart"]).replace(tzinfo=tz)
+        dtend = datetime.fromisoformat(data["dtend"]).replace(tzinfo=tz)
+
+        original_dtstart = None
+        if data.get("original_dtstart") is not None:
+            original_dtstart = datetime.fromisoformat(data["original_dtstart"]).replace(
+                tzinfo=tz
+            )
+
+        original_dtend = None
+        if data.get("original_dtend") is not None:
+            original_dtend = datetime.fromisoformat(data["original_dtend"]).replace(
+                tzinfo=tz
+            )
+
+        created_at = datetime.fromisoformat(data["created_at"])
+
+        lock_unlock_time = None
+        if data.get("lock_unlock_time") is not None:
+            lock_unlock_time = datetime.fromisoformat(data["lock_unlock_time"])
+
+        return cls(
+            uid=data["uid"],
+            summary=data["summary"],
+            dtstart=dtstart,
+            dtend=dtend,
+            timezone=data["timezone"],
+            source_checkout_id=data["source_checkout_id"],
+            source_checkin_id=data.get("source_checkin_id"),
+            created_at=created_at,
+            status=data.get("status", "scheduled"),
+            is_trailing=data.get("is_trailing", False),
+            adjusted_by_lock=data.get("adjusted_by_lock", False),
+            lock_unlock_time=lock_unlock_time,
+            adjustment_source=data.get("adjustment_source"),
+            original_dtend=original_dtend,
+            original_dtstart=original_dtstart,
+        )
 
 
 class CachedEventStore:
@@ -55,15 +174,39 @@ class CachedEventStore:
     feed_token: str
     last_cleanup: datetime
 
-    def __init__(self, **kwargs: Any) -> None:  # noqa: ANN401
-        """Initialize a CachedEventStore (stub: not yet implemented)."""
-        raise NotImplementedError
+    def __init__(
+        self,
+        *,
+        version: int,
+        events: dict[str, TurnoverEvent],
+        feed_token: str,
+        last_cleanup: datetime,
+    ) -> None:
+        """Initialize a CachedEventStore."""
+        self.version = version
+        self.events = events
+        self.feed_token = feed_token
+        self.last_cleanup = last_cleanup
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize this store to a JSON-compatible dict."""
-        raise NotImplementedError
+        return {
+            "version": self.version,
+            "events": {uid: evt.to_dict() for uid, evt in self.events.items()},
+            "feed_token": self.feed_token,
+            "last_cleanup": self.last_cleanup.isoformat(),
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> CachedEventStore:
         """Deserialize a CachedEventStore from a dict."""
-        raise NotImplementedError
+        events = {
+            uid: TurnoverEvent.from_dict(evt_data)
+            for uid, evt_data in data.get("events", {}).items()
+        }
+        return cls(
+            version=data["version"],
+            events=events,
+            feed_token=data["feed_token"],
+            last_cleanup=datetime.fromisoformat(data["last_cleanup"]),
+        )
