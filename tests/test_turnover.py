@@ -11,13 +11,14 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+from homeassistant.components.calendar import CalendarEvent
+
 from custom_components.turnovercal.models import TurnoverEvent
 from custom_components.turnovercal.turnover import (
     compute_turnover_events,
     generate_trailing_uid,
     generate_uid,
 )
-from homeassistant.components.calendar import CalendarEvent
 
 if TYPE_CHECKING:
     import pytest
