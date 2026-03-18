@@ -14,6 +14,7 @@ from custom_components.turnovercal.models import CachedEventStore, TurnoverEvent
 
 UTC = ZoneInfo("UTC")
 ET = ZoneInfo("America/New_York")
+VALID_UID = "0123456789abcdef@turnovercal.homeassistant"
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +146,51 @@ class TestTurnoverEventValidation:
                 source_checkin_id="rc-002",
                 created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
             )
+
+    def test_trailing_must_have_no_checkin(self) -> None:
+        """Trailing events must have source_checkin_id=None."""
+        with pytest.raises(ValueError, match="source_checkin_id=None"):
+            TurnoverEvent(
+                uid=VALID_UID,
+                summary="Turnover - Beach House",
+                dtstart=datetime(2026, 3, 10, 11, 0, tzinfo=ET),
+                dtend=datetime(2026, 3, 10, 15, 0, tzinfo=ET),
+                timezone="America/New_York",
+                source_checkout_id="rc-001",
+                source_checkin_id="rc-002",
+                created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+                is_trailing=True,
+            )
+
+    def test_non_trailing_must_have_checkin(self) -> None:
+        """Non-trailing events must have source_checkin_id set."""
+        with pytest.raises(ValueError, match="must have source_checkin_id"):
+            TurnoverEvent(
+                uid=VALID_UID,
+                summary="Turnover - Beach House",
+                dtstart=datetime(2026, 3, 10, 11, 0, tzinfo=ET),
+                dtend=datetime(2026, 3, 10, 15, 0, tzinfo=ET),
+                timezone="America/New_York",
+                source_checkout_id="rc-001",
+                source_checkin_id=None,
+                created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+                is_trailing=False,
+            )
+
+    def test_to_dict_normalizes_utc(self) -> None:
+        """to_dict normalizes created_at to UTC."""
+        event = TurnoverEvent(
+            uid=VALID_UID,
+            summary="Turnover - Beach House",
+            dtstart=datetime(2026, 3, 10, 11, 0, tzinfo=ET),
+            dtend=datetime(2026, 3, 10, 15, 0, tzinfo=ET),
+            timezone="America/New_York",
+            source_checkout_id="rc-001",
+            source_checkin_id="rc-002",
+            created_at=datetime(2026, 3, 1, 12, 0, tzinfo=ET),
+        )
+        d = event.to_dict()
+        assert "+00:00" in d["created_at"]
 
 
 # ---------------------------------------------------------------------------

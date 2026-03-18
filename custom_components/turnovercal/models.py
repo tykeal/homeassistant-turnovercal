@@ -70,6 +70,14 @@ class TurnoverEvent:
             msg = "dtstart must be before dtend"
             raise ValueError(msg)
 
+        if is_trailing and source_checkin_id is not None:
+            msg = "Trailing events must have source_checkin_id=None"
+            raise ValueError(msg)
+
+        if not is_trailing and source_checkin_id is None:
+            msg = "Non-trailing events must have source_checkin_id"
+            raise ValueError(msg)
+
         self.uid = uid
         self.summary = summary
         self.dtstart = dtstart
@@ -93,6 +101,7 @@ class TurnoverEvent:
         are stored as naive ISO strings. UTC datetimes (created_at,
         lock_unlock_time) are stored with +00:00 offset.
         """
+        _utc = ZoneInfo("UTC")
         return {
             "uid": self.uid,
             "summary": self.summary,
@@ -101,12 +110,12 @@ class TurnoverEvent:
             "timezone": self.timezone,
             "source_checkout_id": self.source_checkout_id,
             "source_checkin_id": self.source_checkin_id,
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.astimezone(_utc).isoformat(),
             "status": self.status,
             "is_trailing": self.is_trailing,
             "adjusted_by_lock": self.adjusted_by_lock,
             "lock_unlock_time": (
-                self.lock_unlock_time.isoformat()
+                self.lock_unlock_time.astimezone(_utc).isoformat()
                 if self.lock_unlock_time is not None
                 else None
             ),

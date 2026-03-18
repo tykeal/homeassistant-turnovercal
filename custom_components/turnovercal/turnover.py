@@ -28,12 +28,17 @@ def _as_datetime(value: date | datetime, tz: ZoneInfo) -> datetime:
 
     CalendarEvent.start/end may be date or datetime. All-day events
     (plain date) are converted to midnight in the given timezone.
+    Naive datetimes are rejected to prevent mixed-offset arithmetic.
 
     Raises:
         TypeError: If value is neither date nor datetime.
+        ValueError: If value is a naive (no tzinfo) datetime.
 
     """
     if isinstance(value, datetime):
+        if value.tzinfo is None:
+            msg = "Naive datetime not allowed; expected tz-aware"
+            raise ValueError(msg)
         return value
     if isinstance(value, date):
         return datetime(value.year, value.month, value.day, tzinfo=tz)
@@ -99,7 +104,7 @@ def compute_turnover_events(
         return []
 
     tz = ZoneInfo(timezone_str)
-    sorted_events = sorted(events, key=lambda e: e.start)
+    sorted_events = sorted(events, key=lambda e: _as_datetime(e.start, tz))
     summary = f"{summary_prefix} - {property_name}"
     result: list[TurnoverEvent] = []
     now_utc = datetime.now(tz=ZoneInfo("UTC"))
@@ -112,9 +117,9 @@ def compute_turnover_events(
 
         if checkout_time > checkin_time:
             _LOGGER.warning(
-                "Overlap detected between '%s' and '%s'; skipping pair",
-                checkout_event.summary,
-                checkin_event.summary,
+                "Overlap detected between events %s and %s; skipping pair",
+                _source_id(checkout_event)[:8],
+                _source_id(checkin_event)[:8],
             )
             continue
 

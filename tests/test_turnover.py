@@ -213,6 +213,11 @@ class TestComputeTurnoverEvents:
         regular = [e for e in result if not e.is_trailing]
         assert len(regular) == 0
         assert any("overlap" in msg.lower() for msg in caplog.messages)
+        # Log must use hashed IDs, not raw event summaries (PII)
+        overlap_msgs = [m for m in caplog.messages if "overlap" in m.lower()]
+        for msg in overlap_msgs:
+            assert "'A'" not in msg
+            assert "'B'" not in msg
 
 
 # ---------------------------------------------------------------------------
