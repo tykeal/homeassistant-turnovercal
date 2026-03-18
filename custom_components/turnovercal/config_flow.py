@@ -67,8 +67,10 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             if lock_monitoring:
                 slot = user_input.get(CONF_CLEANING_CODE_SLOT)
-                if slot is None or slot < 1:
+                if slot is None:
                     errors[CONF_CLEANING_CODE_SLOT] = "slot_required"
+                elif slot < 1:
+                    errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
 
         return errors
 
