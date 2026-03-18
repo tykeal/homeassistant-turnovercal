@@ -96,7 +96,9 @@ class EventCache:
         """
         if self._data is None:
             await self.async_load()
-        assert self._data is not None  # noqa: S101
+        if self._data is None:
+            msg = "Failed to load event cache"
+            raise RuntimeError(msg)
         self._data.events[event.uid] = event
         self.schedule_save()
 
@@ -111,7 +113,9 @@ class EventCache:
         """
         if self._data is None:
             await self.async_load()
-        assert self._data is not None  # noqa: S101
+        if self._data is None:
+            msg = "Failed to load event cache"
+            raise RuntimeError(msg)
         self._data.events.pop(uid, None)
         self.schedule_save()
 

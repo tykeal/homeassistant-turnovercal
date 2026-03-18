@@ -71,7 +71,7 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
 
                 # Derive property name from entity friendly name
-                friendly = ""
+                friendly = entity_id
                 state = self.hass.states.get(entity_id)
                 if state is not None:
                     friendly = state.attributes.get("friendly_name", entity_id)
