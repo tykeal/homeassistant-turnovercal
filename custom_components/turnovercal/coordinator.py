@@ -110,11 +110,11 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             No exceptions; returns cached data on failure.
 
         """
-        now = datetime.now(tz=ZoneInfo(self._timezone_str))
-        start = now - timedelta(days=_QUERY_PAST_DAYS)
-        end = now + timedelta(days=_QUERY_FUTURE_DAYS)
-
         try:
+            now = datetime.now(tz=ZoneInfo(self._timezone_str))
+            start = now - timedelta(days=_QUERY_PAST_DAYS)
+            end = now + timedelta(days=_QUERY_FUTURE_DAYS)
+
             rc_events = await self._calendar_entity.async_get_events(
                 self.hass, start, end
             )
@@ -125,13 +125,20 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             )
             return self._cache.get_events()
 
-        computed = compute_turnover_events(
-            events=rc_events,
-            summary_prefix=self._summary_prefix,
-            property_name=self._property_name,
-            trailing_duration_hours=self._trailing_duration_hours,
-            timezone_str=self._timezone_str,
-        )
+        try:
+            computed = compute_turnover_events(
+                events=rc_events,
+                summary_prefix=self._summary_prefix,
+                property_name=self._property_name,
+                trailing_duration_hours=self._trailing_duration_hours,
+                timezone_str=self._timezone_str,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "Turnover computation failed; serving cached data",
+                exc_info=True,
+            )
+            return self._cache.get_events()
 
         # Build new event map
         new_events = {evt.uid: evt for evt in computed}

@@ -19,6 +19,7 @@ from custom_components.turnovercal.const import (
     CONF_CLEANING_CODE_SLOT,
     CONF_LOCK_MONITORING,
     CONF_PROPERTY_NAME,
+    DEFAULT_LOCK_MONITORING,
     DOMAIN,
 )
 from custom_components.turnovercal.token import generate_token
@@ -79,10 +80,7 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
                     user_input.get(CONF_LOCK_MONITORING),
                 )
 
-                if (
-                    lock_monitoring
-                    and user_input.get(CONF_CLEANING_CODE_SLOT) is None
-                ):
+                if lock_monitoring and user_input.get(CONF_CLEANING_CODE_SLOT) is None:
                     errors[CONF_CLEANING_CODE_SLOT] = "slot_required"
 
             if not errors:
@@ -110,7 +108,10 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
         schema = vol.Schema(
             {
                 vol.Required(CONF_CALENDAR_ENTITY): str,
-                vol.Optional(CONF_LOCK_MONITORING, default=False): bool,
+                vol.Optional(
+                    CONF_LOCK_MONITORING,
+                    default=DEFAULT_LOCK_MONITORING,
+                ): bool,
                 vol.Optional(CONF_CLEANING_CODE_SLOT): int,
             }
         )
