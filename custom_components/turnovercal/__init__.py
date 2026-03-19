@@ -82,7 +82,9 @@ def _resolve_lock_entity(
         ce = hass.config_entries.async_get_entry(ce_id)
         if ce and ce.domain == KEYMASTER_DOMAIN:
             entity_id = ce.data.get(_KM_LOCK_ENTITY_KEY)
-            if isinstance(entity_id, str):
+            if isinstance(entity_id, str) and entity_id.startswith(
+                "lock.",
+            ):
                 return entity_id
 
     return None
