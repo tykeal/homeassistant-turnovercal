@@ -88,10 +88,12 @@ def _validate_keymaster_device(
 
     for ce_id in device.config_entries:
         ce = hass.config_entries.async_get_entry(ce_id)
+        lock_id = ce.data.get("lock_entity_id") if ce else None
         if (
             ce
             and ce.domain == KEYMASTER_DOMAIN
-            and isinstance(ce.data.get("lock_entity_id"), str)
+            and isinstance(lock_id, str)
+            and lock_id.startswith("lock.")
         ):
             return None
 

@@ -369,6 +369,106 @@ class TestConfigFlowLockMonitoring:
         assert result["errors"] is not None
         assert CONF_KEYMASTER_DEVICE in result["errors"]
 
+    async def test_lock_step_non_keymaster_device_rejected(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Lock step with device not linked to keymaster is rejected."""
+        _register_calendar(hass)
+        _register_keymaster(hass)
+
+        # Create a device not linked to keymaster
+        device_reg = dr.async_get(hass)
+        other_entry = MockConfigEntry(
+            domain="zwave_js",
+            data={},
+            title="Z-Wave",
+        )
+        other_entry.add_to_hass(hass)
+        other_device = device_reg.async_get_or_create(
+            config_entry_id=other_entry.entry_id,
+            identifiers={("zwave_js", "node1")},
+            name="Some Lock",
+        )
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_CALENDAR_ENTITY: "calendar.rental_control_beach_house",
+                CONF_LOCK_MONITORING: True,
+            },
+        )
+
+        assert result["step_id"] == "lock"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_KEYMASTER_DEVICE: other_device.id,
+                CONF_CLEANING_CODE_SLOT: 4,
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_KEYMASTER_DEVICE in result["errors"]
+
+    async def test_lock_step_missing_lock_entity_rejected(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Lock step rejects keymaster device without lock_entity_id."""
+        _register_calendar(hass)
+
+        mock_integration(
+            hass,
+            MockModule(
+                "keymaster",
+                async_setup=_noop_async_setup,
+                async_setup_entry=_noop_async_setup,
+            ),
+            built_in=False,
+        )
+        # Config entry without lock_entity_id
+        km_entry = MockConfigEntry(
+            domain="keymaster",
+            data={"lockname": "front_door"},
+            title="Front Door Lock",
+        )
+        km_entry.add_to_hass(hass)
+        device_reg = dr.async_get(hass)
+        device = device_reg.async_get_or_create(
+            config_entry_id=km_entry.entry_id,
+            identifiers={("keymaster", km_entry.entry_id)},
+            name=km_entry.title,
+        )
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_CALENDAR_ENTITY: "calendar.rental_control_beach_house",
+                CONF_LOCK_MONITORING: True,
+            },
+        )
+
+        assert result["step_id"] == "lock"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_KEYMASTER_DEVICE: device.id,
+                CONF_CLEANING_CODE_SLOT: 4,
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_KEYMASTER_DEVICE in result["errors"]
+
     async def test_lock_step_negative_slot_rejected(self, hass: HomeAssistant) -> None:
         """Lock step with negative code slot is rejected by schema."""
         _register_calendar(hass)

@@ -142,6 +142,15 @@ async def async_setup_entry(
     lock_entity_id: str | None = None
     if lock_monitoring and keymaster_device_id:
         lock_entity_id = _resolve_lock_entity(hass, keymaster_device_id)
+        if lock_entity_id is None:
+            _LOGGER.warning(
+                "Lock monitoring enabled for '%s' but Keymaster "
+                "device '%s' could not be resolved to a lock "
+                "entity. Lock monitoring will be disabled",
+                entry.title,
+                keymaster_device_id,
+            )
+            lock_monitoring = False
 
     cache = EventCache(hass, entry.entry_id, feed_token)
     await cache.async_load()
