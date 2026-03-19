@@ -158,6 +158,21 @@ class EventCache:
         self.schedule_save()
         return removed
 
+    async def async_set_feed_token(self, token: str) -> None:
+        """Update the feed token and persist.
+
+        Args:
+            token: The new feed token value.
+
+        """
+        if self._data is None:
+            await self.async_load()
+        if self._data is None:
+            msg = "Failed to load event cache"
+            raise RuntimeError(msg)
+        self._data.feed_token = token
+        await self.async_save()
+
     def get_events(self) -> dict[str, TurnoverEvent]:
         """Return all cached turnover events.
 

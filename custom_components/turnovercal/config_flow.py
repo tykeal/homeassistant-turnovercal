@@ -215,43 +215,44 @@ class TurnoverCalOptionsFlow(OptionsFlow):
                 return self.async_create_entry(data=user_input)
 
         opts = self.config_entry.options
+        defaults = user_input or opts
         schema = vol.Schema(
             {
                 vol.Required(
                     CONF_RETENTION_WEEKS,
-                    default=opts.get(
+                    default=defaults.get(
                         CONF_RETENTION_WEEKS,
                         DEFAULT_RETENTION_WEEKS,
                     ),
                 ): int,
                 vol.Required(
                     CONF_SUMMARY_PREFIX,
-                    default=opts.get(
+                    default=defaults.get(
                         CONF_SUMMARY_PREFIX,
                         DEFAULT_SUMMARY_PREFIX,
                     ),
                 ): str,
                 vol.Required(
                     CONF_PROPERTY_NAME,
-                    default=opts.get(CONF_PROPERTY_NAME, ""),
+                    default=defaults.get(CONF_PROPERTY_NAME, ""),
                 ): str,
                 vol.Required(
                     CONF_TRAILING_DURATION_HOURS,
-                    default=opts.get(
+                    default=defaults.get(
                         CONF_TRAILING_DURATION_HOURS,
                         DEFAULT_TRAILING_DURATION_HOURS,
                     ),
                 ): int,
                 vol.Required(
                     CONF_EARLY_UNLOCK_GRACE_HOURS,
-                    default=opts.get(
+                    default=defaults.get(
                         CONF_EARLY_UNLOCK_GRACE_HOURS,
                         DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
                     ),
                 ): int,
                 vol.Required(
                     CONF_UPDATE_INTERVAL,
-                    default=opts.get(
+                    default=defaults.get(
                         CONF_UPDATE_INTERVAL,
                         DEFAULT_UPDATE_INTERVAL,
                     ),
@@ -297,10 +298,11 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         domain_data = self.hass.data.get(DOMAIN, {})
         entry_data = domain_data.get(self.config_entry.entry_id, {})
         entry_data["feed_token"] = new_token
+        if entry_data:
+            domain_data[self.config_entry.entry_id] = entry_data
         cache = entry_data.get("cache")
-        if cache is not None and cache._data is not None:  # noqa: SLF001
-            cache._data.feed_token = new_token  # noqa: SLF001
-            await cache.async_save()
+        if cache is not None:
+            await cache.async_set_feed_token(new_token)
 
         return self.async_create_entry(data=self._pending_options)
 
@@ -339,7 +341,10 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         if not isinstance(interval, int) or interval < 1 or interval > _max_interval:
             errors[CONF_UPDATE_INTERVAL] = "invalid_range"
 
-        grace = user_input.get(CONF_EARLY_UNLOCK_GRACE_HOURS, 0)
+        grace = user_input.get(
+            CONF_EARLY_UNLOCK_GRACE_HOURS,
+            DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
+        )
         if not isinstance(grace, int) or grace < 0 or grace > _max_grace:
             errors[CONF_EARLY_UNLOCK_GRACE_HOURS] = "invalid_range"
 

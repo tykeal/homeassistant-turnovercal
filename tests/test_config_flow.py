@@ -552,6 +552,8 @@ class TestOptionsFlow:
         assert result["type"] is FlowResultType.FORM
         assert result["errors"] is not None
         assert CONF_EARLY_UNLOCK_GRACE_HOURS in result["errors"]
+
+    async def test_summary_prefix_changeable(self, hass: HomeAssistant) -> None:
         """Summary prefix can be changed and persists."""
         entry = self._create_entry(hass)
 
@@ -687,9 +689,7 @@ class TestOptionsFlow:
         # Set up cache mock in hass.data
         hass.data.setdefault(DOMAIN, {})
         mock_cache = MagicMock()
-        mock_cache._data = MagicMock()  # noqa: SLF001
-        mock_cache._data.feed_token = _EXISTING_TOKEN  # noqa: SLF001
-        mock_cache.async_save = AsyncMock()
+        mock_cache.async_set_feed_token = AsyncMock()
         hass.data[DOMAIN][entry.entry_id] = {"cache": mock_cache}
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -719,9 +719,7 @@ class TestOptionsFlow:
             )
 
         assert result["type"] is FlowResultType.CREATE_ENTRY
-        assert (
-            mock_cache._data.feed_token  # noqa: SLF001
-            == _REGEN_TOKEN
+        mock_cache.async_set_feed_token.assert_awaited_once_with(
+            _REGEN_TOKEN,
         )
         assert hass.data[DOMAIN][entry.entry_id]["feed_token"] == _REGEN_TOKEN
-        mock_cache.async_save.assert_awaited_once()
