@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 Andrew Grimberg <tykeal@bardicgrove.org>
+# SPDX-License-Identifier: Apache-2.0
+mark_cleaning_started:
+  name: Mark cleaning started
+  description: >-
+    Signal that cleaning has begun for a turnover window.
+    Has the same effect as a Keymaster unlock event.
+    Use when no smart lock is present or when the lock
+    event failed to fire.
+  target:
+    entity:
+      integration: turnovercal
+      domain: calendar
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: >-
+        TurnoverCal config entry ID. Alternative to entity
+        targeting when calling from scripts or REST API.
+      required: false
+      example: "a1b2c3d4e5f6"
+      selector:
+        config_entry:
+          integration: turnovercal
+    timestamp:
+      name: Timestamp
+      description: >-
+        Override timestamp for when cleaning started.
+        Interpreted in the Home Assistant instance's
+        configured time zone (Settings > System > General).
+        Defaults to current time if not provided.
+        Useful for retroactive adjustments.
+      required: false
+      example: "2026-03-10T09:30:00"
+      selector:
+        datetime:
