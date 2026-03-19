@@ -1,9 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Andrew Grimberg <tykeal@bardicgrove.org>
 # SPDX-License-Identifier: Apache-2.0
 
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
 [project]
 name = "homeassistant-turnovercal"
-version = "0.0.0"
+dynamic = ["version"]
+description = "Home Assistant custom integration for cleaning turnover windows"
 requires-python = ">=3.13.2"
 dependencies = [
     "homeassistant>=2026.2.0",
@@ -54,3 +59,10 @@ verbose = 2
 
 [tool.codespell]
 ignore-words-list = "hass,checkin"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.build.targets.wheel]
+packages = ["custom_components"]
