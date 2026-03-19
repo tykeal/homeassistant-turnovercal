@@ -169,15 +169,15 @@ and verify DTEND (or DTSTART for early unlock) is adjusted.
 
 ### Tests for User Story 3 (RED first)
 
-- [X] T033 [P] [US3] Write unit tests for cleaning signal handler in `tests/test_coordinator.py` — `_apply_cleaning_signal()`: during active window shortens DTEND to 00:00 next day (different-day check-in), same-day check-in leaves DTEND unchanged, sets `adjusted_by_lock=True`, sets `lock_unlock_time`, sets `adjustment_source="keymaster"`, preserves `original_dtend`/`original_dtstart`, idempotent (second call is no-op on already-adjusted event)
+- [X] T033 [P] [US3] Write unit tests for cleaning signal handler in `tests/test_coordinator.py` — `apply_cleaning_signal()`: during active window shortens DTEND to 00:00 next day (different-day check-in), same-day check-in leaves DTEND unchanged, sets `adjusted_by_lock=True`, sets `lock_unlock_time`, sets `adjustment_source="keymaster"`, preserves `original_dtend`/`original_dtstart`, idempotent (second call is no-op on already-adjusted event)
 - [X] T034 [US3] Write unit tests for early-unlock grace period in `tests/test_coordinator.py` — unlock within grace period moves DTSTART to unlock time, unlock outside grace period ignored, grace period of 0 disables feature, preserves `original_dtstart`
-- [X] T035 [US3] Write unit tests for Keymaster event listener in `tests/test_coordinator.py` — filters by `entity_id` (wrong lock ignored), filters by `state=="unlocked"` (lock events ignored), filters by `code_slot_num` matching configured slot (guest codes ignored, RF ignored, manual ignored), correct unlock triggers `_apply_cleaning_signal()`
+- [X] T035 [US3] Write unit tests for Keymaster event listener in `tests/test_coordinator.py` — filters by `entity_id` (wrong lock ignored), filters by `state=="unlocked"` (lock events ignored), filters by `code_slot_num` matching configured slot (guest codes ignored, RF ignored, manual ignored), correct unlock triggers `apply_cleaning_signal()`
 - [X] T036 [P] [US3] Write unit tests for options flow lock settings in `tests/test_config_flow.py` — lock monitoring toggle (on/off), cleaning code slot changeable, early-unlock grace period changeable (0–12 hours, default 2)
 
 ### Implementation for User Story 3
 
-- [X] T037 [US3] Implement `_apply_cleaning_signal()` method in `custom_components/turnovercal/coordinator.py` — find active or upcoming-within-grace turnover event, apply DTEND shortening per FR-009 (00:00 next day if different-day check-in; no change if same day), apply DTSTART move per FR-017 (within grace period), set status to `adjusted`, set `adjusted_by_lock`, `lock_unlock_time`, `adjustment_source`, preserve originals, save to cache; "same day" determined by calendar date in HA local timezone
-- [X] T038 [US3] Implement Keymaster event listener in `custom_components/turnovercal/coordinator.py` — `hass.bus.async_listen(EVENT_KEYMASTER, _handle_lock_event)`, filter by `entity_id`, `state=="unlocked"`, `code_slot_num==configured_cleaning_code_slot`, call `_apply_cleaning_signal(now=dt_util.utcnow())` on match; register listener in `async_setup_entry()`, unregister on unload <!-- codespell:ignore hass -->
+- [X] T037 [US3] Implement `apply_cleaning_signal()` method in `custom_components/turnovercal/coordinator.py` — find active or upcoming-within-grace turnover event, apply DTEND shortening per FR-009 (00:00 next day if different-day check-in; no change if same day), apply DTSTART move per FR-017 (within grace period), set status to `adjusted`, set `adjusted_by_lock`, `lock_unlock_time`, `adjustment_source`, preserve originals, save to cache; "same day" determined by calendar date in HA local timezone
+- [X] T038 [US3] Implement Keymaster event listener in `custom_components/turnovercal/coordinator.py` — `hass.bus.async_listen(EVENT_KEYMASTER, _handle_lock_event)`, filter by `entity_id`, `state=="unlocked"`, `code_slot_num==configured_cleaning_code_slot`, call `apply_cleaning_signal(now=dt_util.utcnow())` on match; register listener in `async_setup_entry()`, unregister on unload <!-- codespell:ignore hass -->
 - [X] T039 [US3] Update config flow setup step in `custom_components/turnovercal/config_flow.py` to add Keymaster fields — if `has_keymaster`, show lock entity selector and cleaning code slot number input; update options flow to include lock monitoring toggle, code slot, and early-unlock grace period (0–12 hours, default 2)
 - [X] T040 [US3] Update `custom_components/turnovercal/__init__.py` — conditionally register Keymaster listener when `lock_monitoring` is enabled and `lock_entity_id` is set; pass grace period config to coordinator
 
@@ -203,13 +203,13 @@ Keymaster unlock scenario.
 
 ### Tests for User Story 4 (RED first)
 
-- [X] T041 [P] [US4] Write unit tests for service handler in `tests/test_services.py` — entity target resolves to correct coordinator, `config_entry_id` target resolves to correct coordinator, both provided raises `ServiceValidationError`, neither provided raises `ServiceValidationError`, invalid entity raises `ServiceValidationError`, calls `_apply_cleaning_signal()` with `adjustment_source="service_call"`, optional `timestamp` override interpreted in HA timezone, default timestamp is current time
+- [X] T041 [P] [US4] Write unit tests for service handler in `tests/test_services.py` — entity target resolves to correct coordinator, `config_entry_id` target resolves to correct coordinator, both provided raises `ServiceValidationError`, neither provided raises `ServiceValidationError`, invalid entity raises `ServiceValidationError`, calls `apply_cleaning_signal()` with `adjustment_source="service_call"`, optional `timestamp` override interpreted in HA timezone, default timestamp is current time
 - [X] T042 [US4] Write contract tests for service in `tests/test_services.py` — verify service schema matches `specs/001-ical-turnover-export/contracts/service-mark-cleaning.md` (target entity integration/domain, fields config_entry_id and timestamp, selector types), idempotency (second call is no-op)
 
 ### Implementation for User Story 4
 
 - [X] T043 [US4] Create `custom_components/turnovercal/services.yaml` with `mark_cleaning_started` service definition matching contract — name, description, target (entity integration: turnovercal, domain: calendar), fields (config_entry_id with config_entry selector, timestamp with datetime selector)
-- [X] T044 [US4] Implement service handler in `custom_components/turnovercal/services.py` — `async_setup_services(hass)`: register `mark_cleaning_started` handler, resolve target (entity OR config_entry_id, not both, not neither), get coordinator from `hass.data`, call `_apply_cleaning_signal()` with `adjustment_source="service_call"` and optional timestamp override <!-- codespell:ignore hass -->
+- [X] T044 [US4] Implement service handler in `custom_components/turnovercal/services.py` — `async_setup_services(hass)`: register `mark_cleaning_started` handler, resolve target (entity OR config_entry_id, not both, not neither), get coordinator from `hass.data`, call `apply_cleaning_signal()` with `adjustment_source="service_call"` and optional timestamp override <!-- codespell:ignore hass -->
 - [X] T045 [US4] Register service in `custom_components/turnovercal/__init__.py` — call `async_setup_services(hass)` from `async_setup_entry()`, unregister on last entry unload <!-- codespell:ignore hass -->
 
 <!-- markdownlint-enable MD013 -->
@@ -253,7 +253,7 @@ Acceptance scenarios 4-1 through 4-4 pass.
 - **US3 (Phase 5)**: Depends on US1 coordinator (T023) in
   practice — shares coordinator.py and requires EventCache
 - **US4 (Phase 6)**: Depends on US3 (shares
-  `_apply_cleaning_signal()` method)
+  `apply_cleaning_signal()` method)
 - **Polish (Phase 7)**: Depends on all desired stories complete
 
 ### User Story Dependencies
@@ -262,7 +262,7 @@ Acceptance scenarios 4-1 through 4-4 pass.
 - **US2 (P2)**: After US1 — extends EventCache and coordinator
 - **US3 (P3)**: After US1 — adds lock listener to
   coordinator; depends on TurnoverCoordinator from T023
-- **US4 (P3)**: After US3 — reuses `_apply_cleaning_signal()`
+- **US4 (P3)**: After US3 — reuses `apply_cleaning_signal()`
 
 ### Within Each User Story
 
