@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
@@ -118,6 +118,61 @@ class EventCache:
             raise RuntimeError(msg)
         self._data.events.pop(uid, None)
         self.schedule_save()
+
+    async def async_cleanup_expired(
+        self,
+        retention_weeks: int,
+        now: datetime | None = None,
+    ) -> int:
+        """Remove expired cached events.
+
+        Removes events whose dtend is older than the retention
+        period. Events with future dtend or recent dtend within
+        the retention window are preserved.
+
+        Args:
+            retention_weeks: Retention period in weeks.
+            now: Current time for comparison (default: UTC now).
+
+        Returns:
+            Number of events removed.
+
+        """
+        if self._data is None:
+            await self.async_load()
+        if self._data is None:
+            msg = "Failed to load event cache"
+            raise RuntimeError(msg)
+
+        now_utc = now or datetime.now(tz=ZoneInfo("UTC"))
+        cutoff = now_utc - timedelta(weeks=retention_weeks)
+        removed = 0
+
+        for uid in list(self._data.events.keys()):
+            event = self._data.events[uid]
+            if event.dtend < cutoff:
+                del self._data.events[uid]
+                removed += 1
+
+        self._data.last_cleanup = now_utc
+        self.schedule_save()
+        return removed
+
+    async def async_set_feed_token(self, token: str) -> None:
+        """Update the feed token and persist.
+
+        Args:
+            token: The new feed token value.
+
+        """
+        self._feed_token = token
+        if self._data is None:
+            await self.async_load()
+        if self._data is None:
+            msg = "Failed to load event cache"
+            raise RuntimeError(msg)
+        self._data.feed_token = token
+        await self.async_save()
 
     def get_events(self) -> dict[str, TurnoverEvent]:
         """Return all cached turnover events.

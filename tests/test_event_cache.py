@@ -31,17 +31,20 @@ def _make_event(
     uid: str = VALID_UID,
     *,
     is_trailing: bool = False,
+    created_at: datetime | None = None,
+    dtstart: datetime | None = None,
+    dtend: datetime | None = None,
 ) -> TurnoverEvent:
     """Create a TurnoverEvent for testing."""
     return TurnoverEvent(
         uid=uid,
         summary="Turnover - Beach House",
-        dtstart=datetime(2026, 3, 10, 11, 0, tzinfo=ET),
-        dtend=datetime(2026, 3, 10, 15, 0, tzinfo=ET),
+        dtstart=dtstart or datetime(2026, 3, 10, 11, 0, tzinfo=ET),
+        dtend=dtend or datetime(2026, 3, 10, 15, 0, tzinfo=ET),
         timezone="America/New_York",
         source_checkout_id="src-co-001",
         source_checkin_id=None if is_trailing else "src-ci-002",
-        created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+        created_at=created_at or datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
         is_trailing=is_trailing,
     )
 
@@ -186,3 +189,104 @@ class TestEventCacheVersion:
         cache = EventCache(hass, "test_entry_id", _TEST_TOKEN_SHORT)
         store = await cache.async_load()
         assert store.version == 1
+
+
+# ---------------------------------------------------------------------------
+# EventCache - cache retention and cleanup
+# ---------------------------------------------------------------------------
+
+FIXED_NOW = datetime(2026, 3, 15, 12, 0, tzinfo=UTC)
+
+
+class TestEventCacheCleanup:
+    """Tests for EventCache cleanup of expired events."""
+
+    async def test_events_within_retention_kept(self, hass: HomeAssistant) -> None:
+        """Event with past dtend within retention window is kept."""
+        cache = EventCache(hass, "test_entry_id", _TEST_TOKEN)
+        evt = _make_event(
+            created_at=datetime(2026, 2, 22, 12, 0, tzinfo=UTC),
+            dtstart=datetime(2026, 2, 22, 11, 0, tzinfo=ET),
+            dtend=datetime(2026, 2, 22, 15, 0, tzinfo=ET),
+        )
+        await cache.async_add_event(evt)
+
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
+
+        assert removed == 0
+        assert VALID_UID in cache.get_events()
+
+    async def test_events_past_retention_removed(self, hass: HomeAssistant) -> None:
+        """Event with past dtend beyond retention is removed."""
+        cache = EventCache(hass, "test_entry_id", _TEST_TOKEN)
+        evt = _make_event(
+            created_at=datetime(2026, 1, 25, 12, 0, tzinfo=UTC),
+            dtstart=datetime(2026, 1, 25, 11, 0, tzinfo=ET),
+            dtend=datetime(2026, 1, 25, 15, 0, tzinfo=ET),
+        )
+        await cache.async_add_event(evt)
+
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
+
+        assert removed == 1
+        assert VALID_UID not in cache.get_events()
+
+    async def test_future_events_never_removed(self, hass: HomeAssistant) -> None:
+        """Event with future dtend is kept regardless of age."""
+        cache = EventCache(hass, "test_entry_id", _TEST_TOKEN)
+        evt = _make_event(
+            created_at=datetime(2026, 1, 18, 12, 0, tzinfo=UTC),
+            dtstart=datetime(2026, 3, 29, 11, 0, tzinfo=ET),
+            dtend=datetime(2026, 3, 29, 15, 0, tzinfo=ET),
+        )
+        await cache.async_add_event(evt)
+
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
+
+        assert removed == 0
+        assert VALID_UID in cache.get_events()
+
+    async def test_cleanup_updates_last_cleanup(self, hass: HomeAssistant) -> None:
+        """After cleanup, last_cleanup timestamp is updated."""
+        cache = EventCache(hass, "test_entry_id", _TEST_TOKEN)
+        await cache.async_load()
+
+        await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
+
+        assert cache._data is not None  # noqa: SLF001
+        assert cache._data.last_cleanup == FIXED_NOW  # noqa: SLF001
+
+    async def test_cleanup_returns_removed_count(self, hass: HomeAssistant) -> None:
+        """Cleanup returns count of removed events."""
+        cache = EventCache(hass, "test_entry_id", _TEST_TOKEN)
+
+        # Event past retention (7 weeks old dtend)
+        evt1 = _make_event(
+            VALID_UID,
+            created_at=datetime(2026, 1, 25, 12, 0, tzinfo=UTC),
+            dtstart=datetime(2026, 1, 25, 11, 0, tzinfo=ET),
+            dtend=datetime(2026, 1, 25, 15, 0, tzinfo=ET),
+        )
+        await cache.async_add_event(evt1)
+
+        # Event within retention (3 weeks old dtend)
+        evt2 = _make_event(
+            VALID_UID_2,
+            created_at=datetime(2026, 2, 22, 12, 0, tzinfo=UTC),
+            dtstart=datetime(2026, 2, 22, 11, 0, tzinfo=ET),
+            dtend=datetime(2026, 2, 22, 15, 0, tzinfo=ET),
+        )
+        await cache.async_add_event(evt2)
+
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
+
+        assert removed == 1
+
+    async def test_cleanup_empty_cache(self, hass: HomeAssistant) -> None:
+        """Cleanup on empty cache returns zero with no errors."""
+        cache = EventCache(hass, "test_entry_id", _TEST_TOKEN)
+        await cache.async_load()
+
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
+
+        assert removed == 0

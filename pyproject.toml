@@ -12,6 +12,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "freezegun>=1.5",
     "pytest>=8.0",
     "pytest-homeassistant-custom-component>=0.13",
     "pytest-aiohttp>=1.0",

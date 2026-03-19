@@ -39,7 +39,8 @@
           "update_interval": "Update interval (minutes)",
           "lock_entity_id": "Lock entity",
           "cleaning_code_slot": "Cleaning code slot number",
-          "lock_monitoring": "Enable lock monitoring"
+          "lock_monitoring": "Enable lock monitoring",
+          "regenerate_token": "Regenerate feed token"
         },
         "data_description": {
           "retention_weeks": "Number of weeks to retain past turnover events.",
@@ -50,9 +51,18 @@
           "update_interval": "Minutes between calendar update checks.",
           "lock_entity_id": "The lock entity managed by Keymaster.",
           "cleaning_code_slot": "The lock code slot number assigned to the cleaning crew.",
-          "lock_monitoring": "Monitor a Keymaster-managed lock for cleaning code slot changes."
+          "lock_monitoring": "Monitor a Keymaster-managed lock for cleaning code slot changes.",
+          "regenerate_token": "Generate a new feed token, invalidating the current URL."
         }
+      },
+      "confirm_regen": {
+        "title": "Confirm Token Regeneration",
+        "description": "This will invalidate the current feed URL. All subscribed calendar clients will need the new URL.",
+        "data": {}
       }
+    },
+    "error": {
+      "invalid_range": "Value is outside the allowed range."
     }
   }
 }
