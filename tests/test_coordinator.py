@@ -13,12 +13,14 @@ from zoneinfo import ZoneInfo
 
 from freezegun import freeze_time
 from homeassistant.components.calendar import CalendarEvent
+from homeassistant.core import Event
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.turnovercal.const import (
     DEFAULT_SUMMARY_PREFIX,
     DEFAULT_TRAILING_DURATION_HOURS,
     DEFAULT_UPDATE_INTERVAL,
+    EVENT_KEYMASTER,
 )
 from custom_components.turnovercal.coordinator import TurnoverCoordinator
 from custom_components.turnovercal.event_cache import EventCache
@@ -533,3 +535,497 @@ class TestCoordinatorCachePreservation:
         cache.async_remove_event.assert_called_once_with(
             future_event.uid,
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 helper factories
+# ---------------------------------------------------------------------------
+
+
+def _make_cache_mock(
+    events: dict[str, TurnoverEvent] | None = None,
+) -> MagicMock:
+    """Create a mock EventCache with optional events."""
+    cache = MagicMock(spec=EventCache)
+    cache.get_events.return_value = events or {}
+    cache.async_add_event = AsyncMock()
+    cache.async_remove_event = AsyncMock()
+    cache.async_save = AsyncMock()
+    return cache
+
+
+def _make_coordinator(
+    hass: HomeAssistant,
+    cache: MagicMock,
+    *,
+    grace_hours: int = 2,
+    lock_entity_id: str | None = None,
+    cleaning_code_slot: int = 0,
+) -> TurnoverCoordinator:
+    """Create a TurnoverCoordinator with Phase 5 params."""
+    mock_entity = MagicMock()
+    mock_entity.async_get_events = AsyncMock(return_value=[])
+    return TurnoverCoordinator(
+        hass=hass,
+        calendar_entity=mock_entity,
+        cache=cache,
+        summary_prefix=DEFAULT_SUMMARY_PREFIX,
+        property_name="Beach House",
+        trailing_duration_hours=DEFAULT_TRAILING_DURATION_HOURS,
+        timezone_str="America/New_York",
+        update_interval=timedelta(minutes=DEFAULT_UPDATE_INTERVAL),
+        lock_entity_id=lock_entity_id,
+        cleaning_code_slot=cleaning_code_slot,
+        grace_hours=grace_hours,
+    )
+
+
+def _make_event(  # noqa: PLR0913
+    dtstart_day: int,
+    dtstart_hour: int,
+    dtend_day: int,
+    dtend_hour: int,
+    *,
+    uid: str = "0123456789abcdef@turnovercal.homeassistant",
+    is_trailing: bool = False,
+) -> TurnoverEvent:
+    """Create a March 2026 TurnoverEvent for testing."""
+    return TurnoverEvent(
+        uid=uid,
+        summary="Turnover - Beach House",
+        dtstart=_dt(dtstart_day, dtstart_hour),
+        dtend=_dt(dtend_day, dtend_hour),
+        timezone="America/New_York",
+        source_checkout_id="src-001",
+        source_checkin_id=None if is_trailing else "src-002",
+        created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+    )
+
+
+# ---------------------------------------------------------------------------
+# T033: Tests for _apply_cleaning_signal
+# ---------------------------------------------------------------------------
+
+
+class TestApplyCleaningSignal:
+    """Tests for _apply_cleaning_signal method."""
+
+    async def test_different_day_shortens_dtend(self, hass: HomeAssistant) -> None:
+        """Different-day unlock shortens DTEND to 00:00 next day."""
+        event = _make_event(10, 11, 12, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache)
+
+        # Unlock 3/10 14:30 ET = 18:30 UTC
+        unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+
+        assert event.dtend == datetime(2026, 3, 11, 0, 0, tzinfo=ET)
+
+    async def test_same_day_checkin_dtend_unchanged(self, hass: HomeAssistant) -> None:
+        """Same-day check-in leaves DTEND unchanged."""
+        event = _make_event(10, 11, 10, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache)
+
+        # Unlock 3/10 12:00 ET = 16:00 UTC
+        unlock = datetime(2026, 3, 10, 16, 0, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+
+        assert event.dtend == _dt(10, 15)
+
+    async def test_sets_adjusted_by_lock(self, hass: HomeAssistant) -> None:
+        """Cleaning signal sets adjusted_by_lock=True."""
+        event = _make_event(10, 11, 12, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache)
+
+        unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+
+        assert event.adjusted_by_lock is True
+
+    async def test_sets_lock_unlock_time(self, hass: HomeAssistant) -> None:
+        """Cleaning signal records the unlock timestamp."""
+        event = _make_event(10, 11, 12, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache)
+
+        unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+
+        assert event.lock_unlock_time == unlock
+
+    async def test_sets_adjustment_source(self, hass: HomeAssistant) -> None:
+        """Cleaning signal records source as keymaster."""
+        event = _make_event(10, 11, 12, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache)
+
+        unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+
+        assert event.adjustment_source == "keymaster"
+
+    async def test_preserves_original_dtend(self, hass: HomeAssistant) -> None:
+        """First adjustment preserves original_dtend."""
+        event = _make_event(10, 11, 12, 15)
+        original = event.dtend
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache)
+
+        unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+
+        assert event.original_dtend == original
+
+    async def test_sets_status_adjusted(self, hass: HomeAssistant) -> None:
+        """Cleaning signal sets status to adjusted."""
+        event = _make_event(10, 11, 12, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache)
+
+        unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+
+        assert event.status == "adjusted"
+
+    async def test_idempotent_second_call_noop(self, hass: HomeAssistant) -> None:
+        """Second call on already-adjusted event is a no-op."""
+        event = _make_event(10, 11, 12, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache)
+
+        unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+
+        dtend_after = event.dtend
+        cache.async_add_event.reset_mock()
+
+        unlock2 = datetime(2026, 3, 10, 19, 0, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock2)  # noqa: SLF001
+
+        assert event.dtend == dtend_after
+        cache.async_add_event.assert_not_awaited()
+
+    async def test_saves_to_cache(self, hass: HomeAssistant) -> None:
+        """Cleaning signal persists the adjusted event."""
+        event = _make_event(10, 11, 12, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache)
+
+        unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+
+        cache.async_add_event.assert_awaited_once_with(event)
+
+    async def test_no_active_event_returns_false(self, hass: HomeAssistant) -> None:
+        """No matching event means no adjustment."""
+        cache = _make_cache_mock({})
+        coordinator = _make_coordinator(hass, cache)
+
+        unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
+        result = await coordinator._apply_cleaning_signal(  # noqa: SLF001
+            unlock,
+        )
+
+        assert result is False
+        cache.async_add_event.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# T034: Tests for early-unlock grace period
+# ---------------------------------------------------------------------------
+
+
+class TestEarlyUnlockGracePeriod:
+    """Tests for early-unlock grace period."""
+
+    async def test_within_grace_moves_dtstart(self, hass: HomeAssistant) -> None:
+        """Unlock within grace moves DTSTART to unlock time."""
+        event = _make_event(10, 11, 12, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache, grace_hours=2)
+
+        # Unlock 3/10 09:30 ET = 13:30 UTC (within 2hr grace)
+        unlock = datetime(2026, 3, 10, 13, 30, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+
+        expected = datetime(2026, 3, 10, 9, 30, tzinfo=ET)
+        assert event.dtstart == expected
+
+    async def test_outside_grace_ignored(self, hass: HomeAssistant) -> None:
+        """Unlock outside grace period is ignored."""
+        event = _make_event(10, 11, 12, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache, grace_hours=2)
+
+        # Unlock 3/10 08:00 ET = 12:00 UTC (>2hr before 11:00)
+        unlock = datetime(2026, 3, 10, 12, 0, tzinfo=UTC)
+        result = await coordinator._apply_cleaning_signal(  # noqa: SLF001
+            unlock,
+        )
+
+        assert result is False
+        assert event.dtstart == _dt(10, 11)
+
+    async def test_grace_zero_disables(self, hass: HomeAssistant) -> None:
+        """Grace period of 0 disables early-unlock detection."""
+        event = _make_event(10, 11, 12, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache, grace_hours=0)
+
+        # Unlock 3/10 10:00 ET = 14:00 UTC (would be in grace)
+        unlock = datetime(2026, 3, 10, 14, 0, tzinfo=UTC)
+        result = await coordinator._apply_cleaning_signal(  # noqa: SLF001
+            unlock,
+        )
+
+        assert result is False
+        assert event.dtstart == _dt(10, 11)
+
+    async def test_preserves_original_dtstart(self, hass: HomeAssistant) -> None:
+        """Grace period move preserves original_dtstart."""
+        event = _make_event(10, 11, 12, 15)
+        original = event.dtstart
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache, grace_hours=2)
+
+        unlock = datetime(2026, 3, 10, 13, 30, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+
+        assert event.original_dtstart == original
+
+    async def test_early_unlock_also_shortens_multiday(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Early unlock on multi-day turnover adjusts both ends."""
+        event = _make_event(10, 11, 12, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(hass, cache, grace_hours=2)
+
+        # Unlock 3/10 09:30 ET = 13:30 UTC
+        unlock = datetime(2026, 3, 10, 13, 30, tzinfo=UTC)
+        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+
+        # DTSTART moved
+        assert event.dtstart == datetime(2026, 3, 10, 9, 30, tzinfo=ET)
+        # DTEND shortened (different day)
+        assert event.dtend == datetime(2026, 3, 11, 0, 0, tzinfo=ET)
+
+
+# ---------------------------------------------------------------------------
+# T035: Tests for Keymaster event listener
+# ---------------------------------------------------------------------------
+
+
+class TestKeymasterEventListener:
+    """Tests for Keymaster event listener filtering."""
+
+    async def test_wrong_entity_ignored(self, hass: HomeAssistant) -> None:
+        """Unlock from wrong lock entity is ignored."""
+        cache = _make_cache_mock({})
+        coordinator = _make_coordinator(
+            hass,
+            cache,
+            lock_entity_id="lock.front_door",
+            cleaning_code_slot=4,
+        )
+
+        lock_event = Event(
+            EVENT_KEYMASTER,
+            {
+                "entity_id": "lock.back_door",
+                "state": "unlocked",
+                "code_slot_num": 4,
+            },
+        )
+
+        with patch.object(
+            coordinator,
+            "_apply_cleaning_signal",
+            create=True,
+            new_callable=AsyncMock,
+        ) as mock_signal:
+            await coordinator.handle_lock_event(lock_event)
+            mock_signal.assert_not_awaited()
+
+    async def test_lock_state_ignored(self, hass: HomeAssistant) -> None:
+        """Lock event (not unlock) is ignored."""
+        cache = _make_cache_mock({})
+        coordinator = _make_coordinator(
+            hass,
+            cache,
+            lock_entity_id="lock.front_door",
+            cleaning_code_slot=4,
+        )
+
+        lock_event = Event(
+            EVENT_KEYMASTER,
+            {
+                "entity_id": "lock.front_door",
+                "state": "locked",
+                "code_slot_num": 4,
+            },
+        )
+
+        with patch.object(
+            coordinator,
+            "_apply_cleaning_signal",
+            create=True,
+            new_callable=AsyncMock,
+        ) as mock_signal:
+            await coordinator.handle_lock_event(lock_event)
+            mock_signal.assert_not_awaited()
+
+    async def test_wrong_code_slot_ignored(self, hass: HomeAssistant) -> None:
+        """Unlock from wrong code slot is ignored."""
+        cache = _make_cache_mock({})
+        coordinator = _make_coordinator(
+            hass,
+            cache,
+            lock_entity_id="lock.front_door",
+            cleaning_code_slot=4,
+        )
+
+        lock_event = Event(
+            EVENT_KEYMASTER,
+            {
+                "entity_id": "lock.front_door",
+                "state": "unlocked",
+                "code_slot_num": 7,
+            },
+        )
+
+        with patch.object(
+            coordinator,
+            "_apply_cleaning_signal",
+            create=True,
+            new_callable=AsyncMock,
+        ) as mock_signal:
+            await coordinator.handle_lock_event(lock_event)
+            mock_signal.assert_not_awaited()
+
+    async def test_correct_unlock_triggers_signal(self, hass: HomeAssistant) -> None:
+        """Correct unlock triggers _apply_cleaning_signal."""
+        cache = _make_cache_mock({})
+        coordinator = _make_coordinator(
+            hass,
+            cache,
+            lock_entity_id="lock.front_door",
+            cleaning_code_slot=4,
+        )
+
+        lock_event = Event(
+            EVENT_KEYMASTER,
+            {
+                "entity_id": "lock.front_door",
+                "state": "unlocked",
+                "code_slot_num": 4,
+            },
+        )
+
+        with patch.object(
+            coordinator,
+            "_apply_cleaning_signal",
+            create=True,
+            new_callable=AsyncMock,
+        ) as mock_signal:
+            await coordinator.handle_lock_event(lock_event)
+            mock_signal.assert_awaited_once()
+
+    async def test_lock_event_updates_coordinator_data(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Successful lock event updates coordinator data."""
+        event = _make_event(10, 11, 12, 15)
+        cache = _make_cache_mock({event.uid: event})
+        coordinator = _make_coordinator(
+            hass,
+            cache,
+            lock_entity_id="lock.front_door",
+            cleaning_code_slot=4,
+        )
+
+        lock_event = Event(
+            EVENT_KEYMASTER,
+            {
+                "entity_id": "lock.front_door",
+                "state": "unlocked",
+                "code_slot_num": 4,
+            },
+        )
+
+        with (
+            freeze_time("2026-03-10T18:30:00+00:00"),
+            patch.object(
+                coordinator,
+                "async_set_updated_data",
+            ) as mock_set,
+        ):
+            await coordinator.handle_lock_event(lock_event)
+            mock_set.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Coordinator preserves lock-adjusted events during update
+# ---------------------------------------------------------------------------
+
+
+class TestCoordinatorPreservesAdjustments:
+    """Tests for preserving lock-adjusted events on update."""
+
+    async def test_adjusted_event_preserved_when_source_unchanged(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Lock-adjusted event kept when source is unchanged."""
+        adjusted = _make_event(10, 11, 12, 15)
+        adjusted.adjusted_by_lock = True
+        adjusted.original_dtend = adjusted.dtend
+        adjusted.dtend = datetime(2026, 3, 11, 0, 0, tzinfo=ET)
+        adjusted.status = "adjusted"
+
+        cache = _make_cache_mock({adjusted.uid: adjusted})
+
+        unadjusted = _make_event(10, 11, 12, 15)
+
+        coordinator = _make_coordinator(hass, cache)
+
+        with (
+            freeze_time("2026-03-10T18:30:00+00:00"),
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                return_value=[unadjusted],
+            ),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        cache.async_add_event.assert_not_called()
+
+    async def test_adjusted_event_reset_when_source_changes(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Lock-adjusted event overwritten when source changes."""
+        adjusted = _make_event(10, 11, 12, 15)
+        adjusted.adjusted_by_lock = True
+        adjusted.original_dtend = adjusted.dtend
+        adjusted.dtend = datetime(2026, 3, 11, 0, 0, tzinfo=ET)
+        adjusted.status = "adjusted"
+
+        cache = _make_cache_mock({adjusted.uid: adjusted})
+
+        # Source changed: checkin moved to 3/13 15:00
+        changed = _make_event(10, 11, 13, 15)
+
+        coordinator = _make_coordinator(hass, cache)
+
+        with (
+            freeze_time("2026-03-10T18:30:00+00:00"),
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                return_value=[changed],
+            ),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        cache.async_add_event.assert_called_once()

@@ -22,12 +22,14 @@ from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
     CONF_CLEANING_CODE_SLOT,
     CONF_EARLY_UNLOCK_GRACE_HOURS,
+    CONF_LOCK_ENTITY,
     CONF_LOCK_MONITORING,
     CONF_PROPERTY_NAME,
     CONF_RETENTION_WEEKS,
     CONF_SUMMARY_PREFIX,
     CONF_TRAILING_DURATION_HOURS,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
     DEFAULT_RETENTION_WEEKS,
     DEFAULT_SUMMARY_PREFIX,
     DEFAULT_TRAILING_DURATION_HOURS,
@@ -180,6 +182,7 @@ class TestConfigFlowLockMonitoring:
                 user_input={
                     CONF_CALENDAR_ENTITY: ("calendar.rental_control_beach_house"),
                     CONF_LOCK_MONITORING: True,
+                    CONF_LOCK_ENTITY: "lock.front_door",
                     CONF_CLEANING_CODE_SLOT: 4,
                 },
             )
@@ -246,6 +249,7 @@ class TestConfigFlowLockMonitoring:
             user_input={
                 CONF_CALENDAR_ENTITY: ("calendar.rental_control_beach_house"),
                 CONF_LOCK_MONITORING: True,
+                CONF_LOCK_ENTITY: "lock.front_door",
                 CONF_CLEANING_CODE_SLOT: -1,
             },
         )
@@ -723,3 +727,147 @@ class TestOptionsFlow:
             _REGEN_TOKEN,
         )
         assert hass.data[DOMAIN][entry.entry_id]["feed_token"] == _REGEN_TOKEN
+
+
+# ---------------------------------------------------------------------------
+# T036: Options flow - lock settings
+# ---------------------------------------------------------------------------
+
+
+class TestOptionsFlowLockSettings:
+    """Tests for lock settings in options flow."""
+
+    @staticmethod
+    def _create_entry_with_lock(
+        hass: HomeAssistant,
+    ) -> MockConfigEntry:
+        """Create an entry with lock monitoring enabled."""
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_CALENDAR_ENTITY: ("calendar.rental_control_beach_house"),
+                "feed_token": _EXISTING_TOKEN,
+                CONF_LOCK_MONITORING: True,
+                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_CLEANING_CODE_SLOT: 4,
+            },
+            options={
+                CONF_PROPERTY_NAME: "Beach House",
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                CONF_LOCK_MONITORING: True,
+                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_CLEANING_CODE_SLOT: 4,
+                CONF_EARLY_UNLOCK_GRACE_HOURS: (DEFAULT_EARLY_UNLOCK_GRACE_HOURS),
+            },
+            unique_id="calendar.rental_control_beach_house",
+        )
+        entry.add_to_hass(hass)
+        return entry
+
+    async def test_options_form_shows_lock_fields(self, hass: HomeAssistant) -> None:
+        """Options form includes lock monitoring fields."""
+        entry = self._create_entry_with_lock(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+
+        data_schema = result["data_schema"]
+        assert data_schema is not None
+        schema_keys = {
+            k.schema if hasattr(k, "schema") else k for k in data_schema.schema
+        }
+        assert CONF_LOCK_MONITORING in schema_keys
+        assert CONF_LOCK_ENTITY in schema_keys
+        assert CONF_CLEANING_CODE_SLOT in schema_keys
+
+    async def test_lock_monitoring_toggle_off(self, hass: HomeAssistant) -> None:
+        """Lock monitoring can be toggled off in options."""
+        entry = self._create_entry_with_lock(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                CONF_PROPERTY_NAME: "Beach House",
+                CONF_LOCK_MONITORING: False,
+                CONF_EARLY_UNLOCK_GRACE_HOURS: (DEFAULT_EARLY_UNLOCK_GRACE_HOURS),
+            },
+        )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["data"][CONF_LOCK_MONITORING] is False
+
+    async def test_cleaning_code_slot_changeable(self, hass: HomeAssistant) -> None:
+        """Cleaning code slot can be changed in options."""
+        entry = self._create_entry_with_lock(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                CONF_PROPERTY_NAME: "Beach House",
+                CONF_LOCK_MONITORING: True,
+                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_CLEANING_CODE_SLOT: 15,
+                CONF_EARLY_UNLOCK_GRACE_HOURS: (DEFAULT_EARLY_UNLOCK_GRACE_HOURS),
+            },
+        )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["data"][CONF_CLEANING_CODE_SLOT] == 15
+
+    async def test_grace_hours_changeable(self, hass: HomeAssistant) -> None:
+        """Grace hours can be changed and persists."""
+        entry = self._create_entry_with_lock(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                CONF_PROPERTY_NAME: "Beach House",
+                CONF_LOCK_MONITORING: True,
+                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_CLEANING_CODE_SLOT: 4,
+                CONF_EARLY_UNLOCK_GRACE_HOURS: 4,
+            },
+        )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["data"][CONF_EARLY_UNLOCK_GRACE_HOURS] == 4
+
+    async def test_lock_monitoring_requires_slot(self, hass: HomeAssistant) -> None:
+        """Lock monitoring without code slot shows error."""
+        entry = self._create_entry_with_lock(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                CONF_PROPERTY_NAME: "Beach House",
+                CONF_LOCK_MONITORING: True,
+                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_EARLY_UNLOCK_GRACE_HOURS: (DEFAULT_EARLY_UNLOCK_GRACE_HOURS),
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_CLEANING_CODE_SLOT in result["errors"]
