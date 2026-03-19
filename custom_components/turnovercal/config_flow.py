@@ -291,15 +291,16 @@ class TurnoverCalOptionsFlow(OptionsFlow):
 
         new_token = generate_token()
 
-        domain_data = self.hass.data.setdefault(DOMAIN, {})
-        entry_data = domain_data.setdefault(
-            self.config_entry.entry_id,
-            {},
-        )
-        entry_data["feed_token"] = new_token
-        cache = entry_data.get("cache")
-        if cache is not None:
-            await cache.async_set_feed_token(new_token)
+        domain_data = self.hass.data.get(DOMAIN)
+        if domain_data is not None:
+            entry_data = domain_data.get(
+                self.config_entry.entry_id,
+            )
+            if entry_data is not None:
+                entry_data["feed_token"] = new_token
+                cache = entry_data.get("cache")
+                if cache is not None:
+                    await cache.async_set_feed_token(new_token)
 
         # Batch data + options into a single update to avoid
         # triggering the update listener twice.
@@ -333,27 +334,27 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         _max_interval = 60
         _max_grace = 12
 
+        def _is_int(val: object) -> bool:
+            """Check if value is int but not bool."""
+            return isinstance(val, int) and not isinstance(val, bool)
+
         retention = user_input.get(CONF_RETENTION_WEEKS, 0)
-        if (
-            not isinstance(retention, int)
-            or retention < 1
-            or retention > _max_retention
-        ):
+        if not _is_int(retention) or retention < 1 or retention > _max_retention:
             errors[CONF_RETENTION_WEEKS] = "invalid_range"
 
         trailing = user_input.get(CONF_TRAILING_DURATION_HOURS, 0)
-        if not isinstance(trailing, int) or trailing < 1 or trailing > _max_trailing:
+        if not _is_int(trailing) or trailing < 1 or trailing > _max_trailing:
             errors[CONF_TRAILING_DURATION_HOURS] = "invalid_range"
 
         interval = user_input.get(CONF_UPDATE_INTERVAL, 0)
-        if not isinstance(interval, int) or interval < 1 or interval > _max_interval:
+        if not _is_int(interval) or interval < 1 or interval > _max_interval:
             errors[CONF_UPDATE_INTERVAL] = "invalid_range"
 
         grace = user_input.get(
             CONF_EARLY_UNLOCK_GRACE_HOURS,
             DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
         )
-        if not isinstance(grace, int) or grace < 0 or grace > _max_grace:
+        if not _is_int(grace) or grace < 0 or grace > _max_grace:
             errors[CONF_EARLY_UNLOCK_GRACE_HOURS] = "invalid_range"
 
         return errors

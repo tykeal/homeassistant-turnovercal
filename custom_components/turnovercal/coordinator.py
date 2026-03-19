@@ -110,8 +110,8 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             No exceptions; returns cached data on failure.
 
         """
+        now = datetime.now(tz=ZoneInfo(self._timezone_str))
         try:
-            now = datetime.now(tz=ZoneInfo(self._timezone_str))
             start = now - timedelta(days=_QUERY_PAST_DAYS)
             end = now + timedelta(days=_QUERY_FUTURE_DAYS)
 
@@ -147,7 +147,6 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         cached = self._cache.get_events()
 
         # Remove only future stale events; preserve past events
-        now = datetime.now(tz=ZoneInfo(self._timezone_str))
         for uid in list(cached.keys()):
             if uid not in new_events:
                 cached_evt = cached[uid]
