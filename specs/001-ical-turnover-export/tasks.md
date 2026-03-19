@@ -203,14 +203,14 @@ Keymaster unlock scenario.
 
 ### Tests for User Story 4 (RED first)
 
-- [ ] T041 [P] [US4] Write unit tests for service handler in `tests/test_services.py` — entity target resolves to correct coordinator, `config_entry_id` target resolves to correct coordinator, both provided raises `ServiceValidationError`, neither provided raises `ServiceValidationError`, invalid entity raises `ServiceValidationError`, calls `_apply_cleaning_signal()` with `adjustment_source="service_call"`, optional `timestamp` override interpreted in HA timezone, default timestamp is current time
-- [ ] T042 [US4] Write contract tests for service in `tests/test_services.py` — verify service schema matches `specs/001-ical-turnover-export/contracts/service-mark-cleaning.md` (target entity integration/domain, fields config_entry_id and timestamp, selector types), idempotency (second call is no-op)
+- [X] T041 [P] [US4] Write unit tests for service handler in `tests/test_services.py` — entity target resolves to correct coordinator, `config_entry_id` target resolves to correct coordinator, both provided raises `ServiceValidationError`, neither provided raises `ServiceValidationError`, invalid entity raises `ServiceValidationError`, calls `_apply_cleaning_signal()` with `adjustment_source="service_call"`, optional `timestamp` override interpreted in HA timezone, default timestamp is current time
+- [X] T042 [US4] Write contract tests for service in `tests/test_services.py` — verify service schema matches `specs/001-ical-turnover-export/contracts/service-mark-cleaning.md` (target entity integration/domain, fields config_entry_id and timestamp, selector types), idempotency (second call is no-op)
 
 ### Implementation for User Story 4
 
-- [ ] T043 [US4] Create `custom_components/turnovercal/services.yaml` with `mark_cleaning_started` service definition matching contract — name, description, target (entity integration: turnovercal, domain: calendar), fields (config_entry_id with config_entry selector, timestamp with datetime selector)
-- [ ] T044 [US4] Implement service handler in `custom_components/turnovercal/services.py` — `async_setup_services(hass)`: register `mark_cleaning_started` handler, resolve target (entity OR config_entry_id, not both, not neither), get coordinator from `hass.data`, call `_apply_cleaning_signal()` with `adjustment_source="service_call"` and optional timestamp override <!-- codespell:ignore hass -->
-- [ ] T045 [US4] Register service in `custom_components/turnovercal/__init__.py` — call `async_setup_services(hass)` from `async_setup_entry()`, unregister on last entry unload <!-- codespell:ignore hass -->
+- [X] T043 [US4] Create `custom_components/turnovercal/services.yaml` with `mark_cleaning_started` service definition matching contract — name, description, target (entity integration: turnovercal, domain: calendar), fields (config_entry_id with config_entry selector, timestamp with datetime selector)
+- [X] T044 [US4] Implement service handler in `custom_components/turnovercal/services.py` — `async_setup_services(hass)`: register `mark_cleaning_started` handler, resolve target (entity OR config_entry_id, not both, not neither), get coordinator from `hass.data`, call `_apply_cleaning_signal()` with `adjustment_source="service_call"` and optional timestamp override <!-- codespell:ignore hass -->
+- [X] T045 [US4] Register service in `custom_components/turnovercal/__init__.py` — call `async_setup_services(hass)` from `async_setup_entry()`, unregister on last entry unload <!-- codespell:ignore hass -->
 
 <!-- markdownlint-enable MD013 -->
 
