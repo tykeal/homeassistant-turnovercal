@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
+from freezegun import freeze_time
 from homeassistant.components.calendar import CalendarEvent
 from homeassistant.exceptions import HomeAssistantError
 
@@ -357,3 +358,178 @@ class TestCoordinatorModifiedEvents:
         # New events should be added (different UIDs due to different
         # source times)
         assert cache.async_add_event.call_count >= 1
+
+
+# ---------------------------------------------------------------------------
+# TurnoverCoordinator - cache preservation of past events
+# ---------------------------------------------------------------------------
+
+_FROZEN_MARCH_15 = "2026-03-15T12:00:00-04:00"
+
+
+class TestCoordinatorCachePreservation:
+    """Tests for coordinator preservation of past cached events."""
+
+    async def test_past_turnover_preserved_when_rc_removes_source(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Past turnover stays in cache when RC source expires."""
+        past_event = TurnoverEvent(
+            uid="0123456789abcdef@turnovercal.homeassistant",
+            summary="Turnover - Beach House",
+            dtstart=_dt(10, 11),
+            dtend=_dt(10, 15),
+            timezone="America/New_York",
+            source_checkout_id="src-001",
+            source_checkin_id="src-002",
+            created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+        )
+
+        mock_entity = MagicMock()
+        mock_entity.async_get_events = AsyncMock(return_value=[])
+
+        cache = MagicMock(spec=EventCache)
+        cache.get_events.return_value = {
+            past_event.uid: past_event,
+        }
+        cache.async_add_event = AsyncMock()
+        cache.async_remove_event = AsyncMock()
+        cache.async_save = AsyncMock()
+
+        coordinator = TurnoverCoordinator(
+            hass=hass,
+            calendar_entity=mock_entity,
+            cache=cache,
+            summary_prefix=DEFAULT_SUMMARY_PREFIX,
+            property_name="Beach House",
+            trailing_duration_hours=DEFAULT_TRAILING_DURATION_HOURS,
+            timezone_str="America/New_York",
+            update_interval=timedelta(
+                minutes=DEFAULT_UPDATE_INTERVAL,
+            ),
+        )
+
+        with (
+            freeze_time(_FROZEN_MARCH_15),
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                return_value=[],
+            ),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        cache.async_remove_event.assert_not_called()
+
+    async def test_future_turnover_removed_when_cancelled(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Future turnover is removed when guest cancels."""
+        future_event = TurnoverEvent(
+            uid="abcdef0123456789@turnovercal.homeassistant",
+            summary="Turnover - Beach House",
+            dtstart=_dt(20, 11),
+            dtend=_dt(20, 15),
+            timezone="America/New_York",
+            source_checkout_id="src-003",
+            source_checkin_id="src-004",
+            created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+        )
+
+        mock_entity = MagicMock()
+        mock_entity.async_get_events = AsyncMock(return_value=[])
+
+        cache = MagicMock(spec=EventCache)
+        cache.get_events.return_value = {
+            future_event.uid: future_event,
+        }
+        cache.async_add_event = AsyncMock()
+        cache.async_remove_event = AsyncMock()
+        cache.async_save = AsyncMock()
+
+        coordinator = TurnoverCoordinator(
+            hass=hass,
+            calendar_entity=mock_entity,
+            cache=cache,
+            summary_prefix=DEFAULT_SUMMARY_PREFIX,
+            property_name="Beach House",
+            trailing_duration_hours=DEFAULT_TRAILING_DURATION_HOURS,
+            timezone_str="America/New_York",
+            update_interval=timedelta(
+                minutes=DEFAULT_UPDATE_INTERVAL,
+            ),
+        )
+
+        with (
+            freeze_time(_FROZEN_MARCH_15),
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                return_value=[],
+            ),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        cache.async_remove_event.assert_called_once_with(
+            future_event.uid,
+        )
+
+    async def test_past_future_split_mixed(self, hass: HomeAssistant) -> None:
+        """Past events preserved, future events removed."""
+        past_event = TurnoverEvent(
+            uid="0123456789abcdef@turnovercal.homeassistant",
+            summary="Turnover - Beach House",
+            dtstart=_dt(10, 11),
+            dtend=_dt(10, 15),
+            timezone="America/New_York",
+            source_checkout_id="src-001",
+            source_checkin_id="src-002",
+            created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+        )
+        future_event = TurnoverEvent(
+            uid="abcdef0123456789@turnovercal.homeassistant",
+            summary="Turnover - Beach House",
+            dtstart=_dt(20, 11),
+            dtend=_dt(20, 15),
+            timezone="America/New_York",
+            source_checkout_id="src-003",
+            source_checkin_id="src-004",
+            created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+        )
+
+        mock_entity = MagicMock()
+        mock_entity.async_get_events = AsyncMock(return_value=[])
+
+        cache = MagicMock(spec=EventCache)
+        cache.get_events.return_value = {
+            past_event.uid: past_event,
+            future_event.uid: future_event,
+        }
+        cache.async_add_event = AsyncMock()
+        cache.async_remove_event = AsyncMock()
+        cache.async_save = AsyncMock()
+
+        coordinator = TurnoverCoordinator(
+            hass=hass,
+            calendar_entity=mock_entity,
+            cache=cache,
+            summary_prefix=DEFAULT_SUMMARY_PREFIX,
+            property_name="Beach House",
+            trailing_duration_hours=DEFAULT_TRAILING_DURATION_HOURS,
+            timezone_str="America/New_York",
+            update_interval=timedelta(
+                minutes=DEFAULT_UPDATE_INTERVAL,
+            ),
+        )
+
+        with (
+            freeze_time(_FROZEN_MARCH_15),
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                return_value=[],
+            ),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        # Only the future event should be removed
+        cache.async_remove_event.assert_called_once_with(
+            future_event.uid,
+        )
