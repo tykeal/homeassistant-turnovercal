@@ -121,7 +121,7 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
         else:
             registry = er.async_get(self.hass)
             entry = registry.async_get(lock_entity)
-            if entry is None:
+            if entry is None or entry.platform != KEYMASTER_DOMAIN:
                 errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
 
         slot = user_input.get(CONF_CLEANING_CODE_SLOT)
@@ -642,7 +642,7 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         else:
             registry = er.async_get(self.hass)
             entry = registry.async_get(lock_entity)
-            if entry is None:
+            if entry is None or entry.platform != KEYMASTER_DOMAIN:
                 errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
 
         slot = user_input.get(CONF_CLEANING_CODE_SLOT, 0)
