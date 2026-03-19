@@ -28,9 +28,10 @@
     },
     "error": {
       "invalid_entity": "Not a valid calendar entity or entity not found.",
-      "invalid_lock_entity": "Not a valid lock entity. Must start with 'lock.'.",
+      "invalid_lock_entity": "Not a valid Keymaster lock entity.",
       "slot_required": "Cleaning code slot is required when lock monitoring is enabled.",
-      "invalid_slot": "Cleaning code slot must be a positive number (1 or greater)."
+      "invalid_slot": "Cleaning code slot must be a whole number.",
+      "slot_out_of_range": "Cleaning code slot must be between 1 and 1024."
     },
     "abort": {
       "already_configured": "This calendar is already configured."
@@ -82,8 +83,9 @@
     },
     "error": {
       "invalid_range": "Value is outside the allowed range.",
-      "invalid_lock_entity": "Not a valid lock entity. Must start with 'lock.'.",
-      "invalid_slot": "Cleaning code slot must be a positive number (1 or greater)."
+      "invalid_lock_entity": "Not a valid Keymaster lock entity.",
+      "invalid_slot": "Cleaning code slot must be a whole number.",
+      "slot_out_of_range": "Cleaning code slot must be between 1 and 1024."
     }
   },
   "exceptions": {

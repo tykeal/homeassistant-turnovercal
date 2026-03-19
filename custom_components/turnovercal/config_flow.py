@@ -100,8 +100,8 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return errors
 
-    @staticmethod
     def _validate_lock(
+        self,
         user_input: dict[str, Any],
     ) -> dict[str, str]:
         """Validate lock step input.
@@ -118,6 +118,11 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
         lock_entity = user_input.get(CONF_LOCK_ENTITY)
         if not lock_entity or not lock_entity.startswith("lock."):
             errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
+        else:
+            registry = er.async_get(self.hass)
+            entry = registry.async_get(lock_entity)
+            if entry is None:
+                errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
 
         slot = user_input.get(CONF_CLEANING_CODE_SLOT)
         if slot is None:
@@ -126,14 +131,12 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
             errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
         elif isinstance(slot, int):
             if slot < 1 or slot > DEFAULT_CLEANING_CODE_SLOT_MAX:
-                errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
+                errors[CONF_CLEANING_CODE_SLOT] = "slot_out_of_range"
         elif isinstance(slot, float):
-            if (
-                not slot.is_integer()
-                or slot < 1
-                or slot > DEFAULT_CLEANING_CODE_SLOT_MAX
-            ):
+            if not slot.is_integer():
                 errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
+            elif slot < 1 or slot > DEFAULT_CLEANING_CODE_SLOT_MAX:
+                errors[CONF_CLEANING_CODE_SLOT] = "slot_out_of_range"
         else:
             errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
 
@@ -613,8 +616,8 @@ class TurnoverCalOptionsFlow(OptionsFlow):
 
         return errors
 
-    @staticmethod
     def _validate_lock_options(
+        self,
         user_input: dict[str, Any],
     ) -> dict[str, str]:
         """Validate lock step option values.
@@ -636,16 +639,21 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         lock_entity = user_input.get(CONF_LOCK_ENTITY, "")
         if not lock_entity or not lock_entity.startswith("lock."):
             errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
+        else:
+            registry = er.async_get(self.hass)
+            entry = registry.async_get(lock_entity)
+            if entry is None:
+                errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
 
         slot = user_input.get(CONF_CLEANING_CODE_SLOT, 0)
         if (
             isinstance(slot, bool)
             or not isinstance(slot, (int, float))
             or (isinstance(slot, float) and not slot.is_integer())
-            or int(slot) < 1
-            or int(slot) > DEFAULT_CLEANING_CODE_SLOT_MAX
         ):
             errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
+        elif int(slot) < 1 or int(slot) > DEFAULT_CLEANING_CODE_SLOT_MAX:
+            errors[CONF_CLEANING_CODE_SLOT] = "slot_out_of_range"
 
         grace = user_input.get(
             CONF_EARLY_UNLOCK_GRACE_HOURS,

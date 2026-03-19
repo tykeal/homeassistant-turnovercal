@@ -976,6 +976,7 @@ class TestOptionsFlowLockSettings:
     async def test_cleaning_code_slot_changeable(self, hass: HomeAssistant) -> None:
         """Cleaning code slot can be changed in options."""
         _register_keymaster(hass)
+        _register_lock(hass)
         entry = self._create_entry_with_lock(hass)
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -1009,6 +1010,7 @@ class TestOptionsFlowLockSettings:
     async def test_grace_hours_changeable(self, hass: HomeAssistant) -> None:
         """Grace hours can be changed in lock step."""
         _register_keymaster(hass)
+        _register_lock(hass)
         entry = self._create_entry_with_lock(hass)
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -1202,6 +1204,7 @@ class TestOptionsFlowLockSettings:
     async def test_lock_step_then_regen(self, hass: HomeAssistant) -> None:
         """Lock step followed by regen routes correctly."""
         _register_keymaster(hass)
+        _register_lock(hass)
         entry = self._create_entry_with_lock(hass)
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
