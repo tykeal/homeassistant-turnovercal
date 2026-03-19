@@ -19,6 +19,7 @@ from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
     CONF_CLEANING_CODE_SLOT,
     CONF_EARLY_UNLOCK_GRACE_HOURS,
+    CONF_LOCK_ENTITY,
     CONF_LOCK_MONITORING,
     CONF_PROPERTY_NAME,
     CONF_RETENTION_WEEKS,
@@ -76,6 +77,9 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
                 ),
             )
             if lock_monitoring:
+                lock_entity = user_input.get(CONF_LOCK_ENTITY)
+                if not lock_entity or not lock_entity.startswith("lock."):
+                    errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
                 slot = user_input.get(CONF_CLEANING_CODE_SLOT)
                 if slot is None:
                     errors[CONF_CLEANING_CODE_SLOT] = "slot_required"
@@ -135,6 +139,7 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
                 }
 
                 if lock_monitoring:
+                    data[CONF_LOCK_ENTITY] = user_input[CONF_LOCK_ENTITY]
                     data[CONF_CLEANING_CODE_SLOT] = user_input[CONF_CLEANING_CODE_SLOT]
 
                 options: dict[str, Any] = {
@@ -154,6 +159,7 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_LOCK_MONITORING,
                     default=DEFAULT_LOCK_MONITORING,
                 ): bool,
+                vol.Optional(CONF_LOCK_ENTITY): str,
                 vol.Optional(CONF_CLEANING_CODE_SLOT): int,
             }
         )
@@ -257,6 +263,21 @@ class TurnoverCalOptionsFlow(OptionsFlow):
                         DEFAULT_UPDATE_INTERVAL,
                     ),
                 ): int,
+                vol.Optional(
+                    CONF_LOCK_MONITORING,
+                    default=defaults.get(
+                        CONF_LOCK_MONITORING,
+                        DEFAULT_LOCK_MONITORING,
+                    ),
+                ): bool,
+                vol.Optional(
+                    CONF_LOCK_ENTITY,
+                    default=defaults.get(CONF_LOCK_ENTITY, ""),
+                ): str,
+                vol.Optional(
+                    CONF_CLEANING_CODE_SLOT,
+                    default=defaults.get(CONF_CLEANING_CODE_SLOT, 0),
+                ): int,
                 vol.Optional("regenerate_token", default=False): bool,
             }
         )
@@ -356,5 +377,19 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         )
         if not _is_int(grace) or grace < 0 or grace > _max_grace:
             errors[CONF_EARLY_UNLOCK_GRACE_HOURS] = "invalid_range"
+
+        lock_monitoring = bool(
+            user_input.get(
+                CONF_LOCK_MONITORING,
+                DEFAULT_LOCK_MONITORING,
+            ),
+        )
+        if lock_monitoring:
+            lock_entity = user_input.get(CONF_LOCK_ENTITY, "")
+            if not lock_entity or not lock_entity.startswith("lock."):
+                errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
+            slot = user_input.get(CONF_CLEANING_CODE_SLOT, 0)
+            if not _is_int(slot) or slot < 1:
+                errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
 
         return errors

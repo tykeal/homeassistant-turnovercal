@@ -12,13 +12,18 @@ from zoneinfo import ZoneInfo
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from custom_components.turnovercal.const import DOMAIN
+from custom_components.turnovercal.const import (
+    DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
+    DOMAIN,
+)
 from custom_components.turnovercal.models import TurnoverEvent
 from custom_components.turnovercal.turnover import compute_turnover_events
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from homeassistant.components.calendar import CalendarEvent
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import Event, HomeAssistant
 
     from custom_components.turnovercal.event_cache import EventCache
 
@@ -67,6 +72,9 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         trailing_duration_hours: int,
         timezone_str: str,
         update_interval: timedelta,
+        lock_entity_id: str | None = None,
+        cleaning_code_slot: int = 0,
+        grace_hours: int = DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
     ) -> None:
         """Initialize the coordinator.
 
@@ -79,6 +87,9 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             trailing_duration_hours: Hours for trailing turnover window.
             timezone_str: IANA timezone string.
             update_interval: How often to poll for updates.
+            lock_entity_id: Keymaster lock entity to monitor.
+            cleaning_code_slot: Lock code slot for cleaning staff.
+            grace_hours: Early-unlock grace period in hours.
 
         """
         super().__init__(
@@ -93,6 +104,9 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         self._property_name = property_name
         self._trailing_duration_hours = trailing_duration_hours
         self._timezone_str = timezone_str
+        self._lock_entity_id = lock_entity_id
+        self._cleaning_code_slot = cleaning_code_slot
+        self._grace_hours = grace_hours
 
     async def _async_update_data(
         self,
@@ -140,26 +154,202 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             )
             return self._cache.get_events()
 
-        # Build new event map
         new_events = {evt.uid: evt for evt in computed}
+        await self._merge_events(new_events, now)
+        return self._cache.get_events()
 
-        # Get existing cached events
+    async def _merge_events(
+        self,
+        new_events: dict[str, TurnoverEvent],
+        now: datetime,
+    ) -> None:
+        """Merge computed events into cache.
+
+        Removes stale future events and adds or updates changed
+        events. Preserves lock-adjusted events whose source has
+        not changed.
+
+        Args:
+            new_events: Freshly computed events keyed by UID.
+            now: Current local time for past/future split.
+
+        """
         cached = self._cache.get_events()
 
-        # Remove only future stale events; preserve past events
         for uid in list(cached.keys()):
             if uid not in new_events:
                 cached_evt = cached[uid]
-                # Only remove if dtend is in the future (cancelled/changed)
-                # Past events are preserved for retention cleanup
                 if cached_evt.dtend > now:
                     await self._cache.async_remove_event(uid)
 
-        # Add/update only changed events
         for evt in new_events.values():
             existing = cached.get(evt.uid)
-            if existing is not None and not _event_changed(existing, evt):
-                continue
+            if existing is not None:
+                if self._should_keep_adjustment(existing, evt):
+                    if self._merge_metadata(existing, evt):
+                        await self._cache.async_add_event(existing)
+                    continue
+                if not _event_changed(existing, evt):
+                    continue
             await self._cache.async_add_event(evt)
 
-        return self._cache.get_events()
+    @staticmethod
+    def _merge_metadata(
+        adjusted: TurnoverEvent,
+        computed: TurnoverEvent,
+    ) -> bool:
+        """Copy non-time fields from computed into adjusted event.
+
+        Preserves lock-adjusted times and metadata while updating
+        source fields that may have changed (e.g. summary).
+
+        Args:
+            adjusted: The lock-adjusted cached event to update.
+            computed: The freshly computed event with current data.
+
+        Returns:
+            True if any field was changed.
+
+        """
+        changed = False
+        if adjusted.summary != computed.summary:
+            adjusted.summary = computed.summary
+            changed = True
+        if adjusted.source_checkout_id != computed.source_checkout_id:
+            adjusted.source_checkout_id = computed.source_checkout_id
+            changed = True
+        if adjusted.source_checkin_id != computed.source_checkin_id:
+            adjusted.source_checkin_id = computed.source_checkin_id
+            changed = True
+        if adjusted.is_trailing != computed.is_trailing:
+            adjusted.is_trailing = computed.is_trailing
+            changed = True
+        return changed
+
+    @staticmethod
+    def _should_keep_adjustment(
+        existing: TurnoverEvent,
+        computed: TurnoverEvent,
+    ) -> bool:
+        """Check if a lock adjustment should be preserved.
+
+        Returns True when the existing event was adjusted by a lock
+        and the underlying source event has not changed.
+
+        Args:
+            existing: The cached (possibly adjusted) event.
+            computed: The freshly computed event.
+
+        Returns:
+            True if the adjustment should be kept.
+
+        """
+        if not existing.adjusted_by_lock:
+            return False
+        orig_start = existing.original_dtstart or existing.dtstart
+        orig_end = existing.original_dtend or existing.dtend
+        return computed.dtstart == orig_start and computed.dtend == orig_end
+
+    def _find_target_event(self, now: datetime) -> TurnoverEvent | None:
+        """Find active or upcoming-within-grace turnover event.
+
+        Searches cached events for one whose window contains the
+        given time, or whose grace period includes it.
+
+        Args:
+            now: Current UTC time.
+
+        Returns:
+            The matching TurnoverEvent or None.
+
+        """
+        events = self._cache.get_events()
+        for evt in events.values():
+            if evt.dtstart <= now <= evt.dtend:
+                return evt
+            if self._grace_hours > 0:
+                grace_start = evt.dtstart - timedelta(
+                    hours=self._grace_hours,
+                )
+                if grace_start <= now < evt.dtstart:
+                    return evt
+        return None
+
+    async def _apply_cleaning_signal(
+        self,
+        now: datetime,
+        source: str = "keymaster",
+    ) -> bool:
+        """Apply a cleaning signal to the active turnover event.
+
+        Finds the active or upcoming-within-grace event and adjusts
+        DTEND (shortened to end-of-day) and/or DTSTART (moved to
+        unlock time). Sets lock metadata and persists to cache.
+
+        Args:
+            now: UTC time of the cleaning signal.
+            source: Signal source identifier.
+
+        Returns:
+            True if an event was adjusted, False otherwise.
+
+        """
+        target = self._find_target_event(now)
+        if target is None:
+            return False
+
+        if target.adjusted_by_lock:
+            return False
+
+        tz = ZoneInfo(self._timezone_str)
+        now_local = now.astimezone(tz)
+
+        # Grace period: move DTSTART to unlock time
+        if now < target.dtstart:
+            if target.original_dtstart is None:
+                target.original_dtstart = target.dtstart
+            target.dtstart = now_local
+
+        # DTEND shortening: different-day check-in
+        if target.dtstart <= now:
+            unlock_date = now_local.date()
+            checkin_date = target.dtend.date()
+            if unlock_date != checkin_date:
+                if target.original_dtend is None:
+                    target.original_dtend = target.dtend
+                next_midnight = (now_local + timedelta(days=1)).replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                target.dtend = next_midnight
+
+        target.adjusted_by_lock = True
+        target.lock_unlock_time = now
+        target.adjustment_source = source
+        target.status = "adjusted"
+
+        await self._cache.async_add_event(target)
+        return True
+
+    async def handle_lock_event(self, event: Event[Any]) -> None:
+        """Handle a Keymaster lock state changed event.
+
+        Filters by entity ID, unlock state, and code slot number.
+        On match, applies the cleaning signal to the active
+        turnover event.
+
+        Args:
+            event: The Keymaster bus event.
+
+        """
+        data = event.data
+        if data.get("entity_id") != self._lock_entity_id:
+            return
+        if data.get("state") != "unlocked":
+            return
+        if data.get("code_slot_num") != self._cleaning_code_slot:
+            return
+
+        now = datetime.now(tz=ZoneInfo("UTC"))
+        adjusted = await self._apply_cleaning_signal(now)
+        if adjusted:
+            self.async_set_updated_data(self._cache.get_events())

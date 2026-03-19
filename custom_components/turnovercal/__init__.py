@@ -14,16 +14,23 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
+    CONF_CLEANING_CODE_SLOT,
+    CONF_EARLY_UNLOCK_GRACE_HOURS,
+    CONF_LOCK_ENTITY,
+    CONF_LOCK_MONITORING,
     CONF_PROPERTY_NAME,
     CONF_RETENTION_WEEKS,
     CONF_SUMMARY_PREFIX,
     CONF_TRAILING_DURATION_HOURS,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
+    DEFAULT_LOCK_MONITORING,
     DEFAULT_RETENTION_WEEKS,
     DEFAULT_SUMMARY_PREFIX,
     DEFAULT_TRAILING_DURATION_HOURS,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    EVENT_KEYMASTER,
 )
 from custom_components.turnovercal.coordinator import TurnoverCoordinator
 from custom_components.turnovercal.event_cache import EventCache
@@ -71,6 +78,24 @@ async def async_setup_entry(
     )
     update_minutes = options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
 
+    # Lock monitoring settings (from options, fallback to data)
+    lock_monitoring = options.get(
+        CONF_LOCK_MONITORING,
+        entry.data.get(CONF_LOCK_MONITORING, DEFAULT_LOCK_MONITORING),
+    )
+    lock_entity_id = options.get(
+        CONF_LOCK_ENTITY,
+        entry.data.get(CONF_LOCK_ENTITY),
+    )
+    cleaning_code_slot = options.get(
+        CONF_CLEANING_CODE_SLOT,
+        entry.data.get(CONF_CLEANING_CODE_SLOT, 0),
+    )
+    grace_hours = options.get(
+        CONF_EARLY_UNLOCK_GRACE_HOURS,
+        DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
+    )
+
     cache = EventCache(hass, entry.entry_id, feed_token)
     await cache.async_load()
 
@@ -93,6 +118,9 @@ async def async_setup_entry(
         trailing_duration_hours=trailing_hours,
         timezone_str=tz_str,
         update_interval=timedelta(minutes=update_minutes),
+        lock_entity_id=lock_entity_id if lock_monitoring else None,
+        cleaning_code_slot=cleaning_code_slot,
+        grace_hours=grace_hours,
     )
 
     hass.data[DOMAIN][entry.entry_id] = {
@@ -109,6 +137,14 @@ async def async_setup_entry(
 
     # Start coordinator
     await coordinator.async_config_entry_first_refresh()
+
+    # Register Keymaster listener if lock monitoring is enabled
+    if lock_monitoring and lock_entity_id:
+        unsub_lock = hass.bus.async_listen(
+            EVENT_KEYMASTER,
+            coordinator.handle_lock_event,
+        )
+        entry.async_on_unload(unsub_lock)
 
     async def _async_hourly_cleanup(_now: datetime) -> None:
         """Run hourly cleanup of expired events."""
