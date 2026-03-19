@@ -7,7 +7,7 @@ DOMAIN = "turnovercal"
 
 # Configuration keys
 CONF_CALENDAR_ENTITY = "calendar_entity_id"
-CONF_LOCK_ENTITY = "lock_entity_id"
+CONF_KEYMASTER_DEVICE = "keymaster_device_id"
 CONF_CLEANING_CODE_SLOT = "cleaning_code_slot"
 CONF_RETENTION_WEEKS = "retention_weeks"
 CONF_SUMMARY_PREFIX = "summary_prefix"
@@ -27,6 +27,9 @@ DEFAULT_LOCK_MONITORING = False
 
 # Integration domains
 KEYMASTER_DOMAIN = "keymaster"
+
+# Keymaster config entry data keys
+KM_LOCK_ENTITY_KEY = "lock_entity_id"
 
 # Selector limits
 DEFAULT_CLEANING_CODE_SLOT_MAX = 1024

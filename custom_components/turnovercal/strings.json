@@ -17,18 +17,18 @@
         "title": "Lock Configuration",
         "description": "Configure Keymaster lock monitoring settings.",
         "data": {
-          "lock_entity_id": "Lock entity",
+          "keymaster_device_id": "Keymaster lock",
           "cleaning_code_slot": "Cleaning code slot number"
         },
         "data_description": {
-          "lock_entity_id": "The lock entity managed by Keymaster.",
+          "keymaster_device_id": "Select the Keymaster-managed lock device.",
           "cleaning_code_slot": "The lock code slot number assigned to the cleaning crew."
         }
       }
     },
     "error": {
       "invalid_entity": "Not a valid calendar entity or entity not found.",
-      "invalid_lock_entity": "Not a valid Keymaster lock entity.",
+      "invalid_keymaster_device": "Not a valid Keymaster lock device.",
       "slot_required": "Cleaning code slot is required when lock monitoring is enabled.",
       "invalid_slot": "Cleaning code slot must be a whole number.",
       "slot_out_of_range": "Cleaning code slot must be between 1 and 1024."
@@ -65,12 +65,12 @@
         "title": "Lock Configuration",
         "description": "Configure Keymaster lock monitoring settings.",
         "data": {
-          "lock_entity_id": "Lock entity",
+          "keymaster_device_id": "Keymaster lock",
           "cleaning_code_slot": "Cleaning code slot number",
           "early_unlock_grace_hours": "Early unlock grace (hours)"
         },
         "data_description": {
-          "lock_entity_id": "The lock entity managed by Keymaster.",
+          "keymaster_device_id": "Select the Keymaster-managed lock device.",
           "cleaning_code_slot": "The lock code slot number assigned to the cleaning crew.",
           "early_unlock_grace_hours": "Hours before check-in to unlock the door early."
         }
@@ -83,7 +83,7 @@
     },
     "error": {
       "invalid_range": "Value is outside the allowed range.",
-      "invalid_lock_entity": "Not a valid Keymaster lock entity.",
+      "invalid_keymaster_device": "Not a valid Keymaster lock device.",
       "invalid_slot": "Cleaning code slot must be a whole number.",
       "slot_out_of_range": "Cleaning code slot must be between 1 and 1024."
     }
