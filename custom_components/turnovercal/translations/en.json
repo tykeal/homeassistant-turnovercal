@@ -52,6 +52,11 @@
           "cleaning_code_slot": "The lock code slot number assigned to the cleaning crew.",
           "lock_monitoring": "Monitor a Keymaster-managed lock for cleaning code slot changes."
         }
+      },
+      "confirm_regen": {
+        "title": "Confirm Token Regeneration",
+        "description": "This will invalidate the current feed URL. All subscribed calendar clients will need the new URL.",
+        "data": {}
       }
     }
   }

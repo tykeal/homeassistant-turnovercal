@@ -5,17 +5,21 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+import logging
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.event import async_track_time_interval
 
 from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
     CONF_PROPERTY_NAME,
+    CONF_RETENTION_WEEKS,
     CONF_SUMMARY_PREFIX,
     CONF_TRAILING_DURATION_HOURS,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_RETENTION_WEEKS,
     DEFAULT_SUMMARY_PREFIX,
     DEFAULT_TRAILING_DURATION_HOURS,
     DEFAULT_UPDATE_INTERVAL,
@@ -29,6 +33,8 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_component import EntityComponent
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -101,6 +107,24 @@ async def async_setup_entry(
 
     # Start coordinator
     await coordinator.async_config_entry_first_refresh()
+
+    async def _async_hourly_cleanup(_now: datetime) -> None:
+        """Run hourly cleanup of expired events."""
+        retention = entry.options.get(
+            CONF_RETENTION_WEEKS,
+            DEFAULT_RETENTION_WEEKS,
+        )
+        removed = await cache.async_cleanup_expired(retention)
+        if removed > 0:
+            _LOGGER.info(
+                "Cleaned up %d expired turnover events",
+                removed,
+            )
+
+    unsub_cleanup = async_track_time_interval(
+        hass, _async_hourly_cleanup, timedelta(hours=1)
+    )
+    entry.async_on_unload(unsub_cleanup)
 
     return True
 

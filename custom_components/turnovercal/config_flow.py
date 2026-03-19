@@ -18,9 +18,19 @@ from homeassistant.helpers import entity_registry as er
 from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
     CONF_CLEANING_CODE_SLOT,
+    CONF_EARLY_UNLOCK_GRACE_HOURS,
     CONF_LOCK_MONITORING,
     CONF_PROPERTY_NAME,
+    CONF_RETENTION_WEEKS,
+    CONF_SUMMARY_PREFIX,
+    CONF_TRAILING_DURATION_HOURS,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
     DEFAULT_LOCK_MONITORING,
+    DEFAULT_RETENTION_WEEKS,
+    DEFAULT_SUMMARY_PREFIX,
+    DEFAULT_TRAILING_DURATION_HOURS,
+    DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
 )
 from custom_components.turnovercal.token import generate_token
@@ -171,16 +181,20 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class TurnoverCalOptionsFlow(OptionsFlow):
-    """Handle TurnoverCal options flow.
+    """Handle TurnoverCal options flow."""
 
-    Stub for Phase 4 (US2) implementation.
-    """
+    def __init__(self) -> None:
+        """Initialize options flow."""
+        self._pending_options: dict[str, Any] = {}
 
     async def async_step_init(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
         """Handle the initial options step.
+
+        Presents a form with all configurable options. Validates
+        numeric ranges and routes to token regeneration if requested.
 
         Args:
             user_input: User-submitted form data or None on first show.
@@ -189,10 +203,142 @@ class TurnoverCalOptionsFlow(OptionsFlow):
             ConfigFlowResult with form or created entry.
 
         """
+        errors: dict[str, str] = {}
+
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            errors = self._validate_options(user_input)
+            if not errors:
+                regen = user_input.pop("regenerate_token", False)
+                if regen:
+                    self._pending_options = user_input
+                    return await self.async_step_confirm_regen()
+                return self.async_create_entry(data=user_input)
+
+        opts = self.config_entry.options
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_RETENTION_WEEKS,
+                    default=opts.get(
+                        CONF_RETENTION_WEEKS,
+                        DEFAULT_RETENTION_WEEKS,
+                    ),
+                ): int,
+                vol.Required(
+                    CONF_SUMMARY_PREFIX,
+                    default=opts.get(
+                        CONF_SUMMARY_PREFIX,
+                        DEFAULT_SUMMARY_PREFIX,
+                    ),
+                ): str,
+                vol.Required(
+                    CONF_PROPERTY_NAME,
+                    default=opts.get(CONF_PROPERTY_NAME, ""),
+                ): str,
+                vol.Required(
+                    CONF_TRAILING_DURATION_HOURS,
+                    default=opts.get(
+                        CONF_TRAILING_DURATION_HOURS,
+                        DEFAULT_TRAILING_DURATION_HOURS,
+                    ),
+                ): int,
+                vol.Required(
+                    CONF_EARLY_UNLOCK_GRACE_HOURS,
+                    default=opts.get(
+                        CONF_EARLY_UNLOCK_GRACE_HOURS,
+                        DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
+                    ),
+                ): int,
+                vol.Required(
+                    CONF_UPDATE_INTERVAL,
+                    default=opts.get(
+                        CONF_UPDATE_INTERVAL,
+                        DEFAULT_UPDATE_INTERVAL,
+                    ),
+                ): int,
+                vol.Optional("regenerate_token", default=False): bool,
+            }
+        )
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({}),
+            data_schema=schema,
+            errors=errors,
         )
+
+    async def async_step_confirm_regen(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Handle token regeneration confirmation.
+
+        Shows a confirmation form. On confirmation, generates a new
+        feed token and updates both the config entry and cache.
+
+        Args:
+            user_input: User-submitted data or None on first show.
+
+        Returns:
+            ConfigFlowResult with form or created entry.
+
+        """
+        if user_input is None:
+            return self.async_show_form(
+                step_id="confirm_regen",
+                data_schema=vol.Schema({}),
+            )
+
+        new_token = generate_token()
+        self.hass.config_entries.async_update_entry(
+            self.config_entry,
+            data={**self.config_entry.data, "feed_token": new_token},
+        )
+
+        domain_data = self.hass.data.get(DOMAIN, {})
+        entry_data = domain_data.get(self.config_entry.entry_id, {})
+        cache = entry_data.get("cache")
+        if cache is not None and cache._data is not None:  # noqa: SLF001
+            cache._data.feed_token = new_token  # noqa: SLF001
+
+        return self.async_create_entry(data=self._pending_options)
+
+    @staticmethod
+    def _validate_options(
+        user_input: dict[str, Any],
+    ) -> dict[str, str]:
+        """Validate option ranges and return errors dict.
+
+        Args:
+            user_input: The submitted form data.
+
+        Returns:
+            Dictionary of field → error key (empty if valid).
+
+        """
+        errors: dict[str, str] = {}
+        _max_retention = 52
+        _max_trailing = 24
+        _max_interval = 60
+        _max_grace = 12
+
+        retention = user_input.get(CONF_RETENTION_WEEKS, 0)
+        if (
+            not isinstance(retention, int)
+            or retention < 1
+            or retention > _max_retention
+        ):
+            errors[CONF_RETENTION_WEEKS] = "invalid_range"
+
+        trailing = user_input.get(CONF_TRAILING_DURATION_HOURS, 0)
+        if not isinstance(trailing, int) or trailing < 1 or trailing > _max_trailing:
+            errors[CONF_TRAILING_DURATION_HOURS] = "invalid_range"
+
+        interval = user_input.get(CONF_UPDATE_INTERVAL, 0)
+        if not isinstance(interval, int) or interval < 1 or interval > _max_interval:
+            errors[CONF_UPDATE_INTERVAL] = "invalid_range"
+
+        grace = user_input.get(CONF_EARLY_UNLOCK_GRACE_HOURS, 0)
+        if not isinstance(grace, int) or grace < 0 or grace > _max_grace:
+            errors[CONF_EARLY_UNLOCK_GRACE_HOURS] = "invalid_range"
+
+        return errors

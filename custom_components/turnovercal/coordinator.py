@@ -146,15 +146,20 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         # Get existing cached events
         cached = self._cache.get_events()
 
-        # Remove stale events no longer in computed set
+        # Remove only future stale events; preserve past events
+        now = datetime.now(tz=ZoneInfo(self._timezone_str))
         for uid in list(cached.keys()):
             if uid not in new_events:
-                await self._cache.async_remove_event(uid)
+                cached_evt = cached[uid]
+                # Only remove if dtend is in the future (cancelled/changed)
+                # Past events are preserved for retention cleanup
+                if cached_evt.dtend > now:
+                    await self._cache.async_remove_event(uid)
 
         # Add/update only changed events
         for evt in new_events.values():
-            cached_evt = cached.get(evt.uid)
-            if cached_evt is not None and not _event_changed(cached_evt, evt):
+            existing = cached.get(evt.uid)
+            if existing is not None and not _event_changed(existing, evt):
                 continue
             await self._cache.async_add_event(evt)
 
