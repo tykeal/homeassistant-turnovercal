@@ -21,9 +21,11 @@ from custom_components.turnovercal.models import TurnoverEvent
 from custom_components.turnovercal.services import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_TIMESTAMP,
+    SERVICE_MARK_CLEANING,
     _handle_mark_cleaning,
     _parse_timestamp,
     _resolve_coordinators,
+    async_setup_services,
 )
 
 if TYPE_CHECKING:
@@ -355,6 +357,33 @@ class TestHandleMarkCleaning:
         naive_ts = datetime(2026, 3, 15, 10, 0, 0)  # noqa: DTZ001
         with pytest.raises(ServiceValidationError):
             _parse_timestamp(hass, naive_ts)
+
+    async def test_z_suffix_timestamp_accepted(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Timestamp with Z suffix is accepted as UTC."""
+        result = _parse_timestamp(hass, "2026-03-15T10:30:00Z")
+        assert result.tzinfo == UTC
+        assert result.hour == 10
+        assert result.minute == 30
+
+    async def test_setup_services_idempotent(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Calling setup twice does not re-register."""
+        await async_setup_services(hass)
+        assert hass.services.has_service(
+            DOMAIN,
+            SERVICE_MARK_CLEANING,
+        )
+        # Second call should be a no-op
+        await async_setup_services(hass)
+        assert hass.services.has_service(
+            DOMAIN,
+            SERVICE_MARK_CLEANING,
+        )
 
 
 # -------------------------------------------------------------------

@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.util import dt as dt_util
 
 from custom_components.turnovercal.const import DOMAIN
 
@@ -162,7 +163,17 @@ def _parse_timestamp(
         if isinstance(ts_raw, datetime):
             parsed = ts_raw
         else:
-            parsed = datetime.fromisoformat(str(ts_raw))
+            result = dt_util.parse_datetime(str(ts_raw))
+            if result is None:
+                msg = f"Invalid timestamp: {ts_raw}"
+                raise ServiceValidationError(  # noqa: TRY301
+                    msg,
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_timestamp",
+                )
+            parsed = result
+    except ServiceValidationError:
+        raise
     except (ValueError, TypeError) as err:
         msg = f"Invalid timestamp: {ts_raw}"
         raise ServiceValidationError(
@@ -209,10 +220,15 @@ async def _handle_mark_cleaning(call: ServiceCall) -> None:
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Register TurnoverCal services.
 
+    Guarded to be idempotent — skips registration when
+    the service is already registered.
+
     Args:
         hass: Home Assistant instance.
 
     """
+    if hass.services.has_service(DOMAIN, SERVICE_MARK_CLEANING):
+        return
     hass.services.async_register(
         DOMAIN,
         SERVICE_MARK_CLEANING,
