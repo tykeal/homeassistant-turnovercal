@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2026 Andrew Grimberg <tykeal@bardicgrove.org>
+# SPDX-License-Identifier: Apache-2.0
+---
+ignore:
+  # pyOpenSSL transitive dep via homeassistant
+  - vulnerability: GHSA-5pwr-322w-8jr4
+    package:
+      name: pyOpenSSL
+      type: python
+  - vulnerability: GHSA-vp96-hxj8-p424
+    package:
+      name: pyOpenSSL
+      type: python
+  - vulnerability: CVE-2026-27448
+    package:
+      name: pyOpenSSL
+      type: python
+  - vulnerability: CVE-2026-27459
+    package:
+      name: pyOpenSSL
+      type: python
+  # PyJWT transitive dep via homeassistant
+  - vulnerability: GHSA-752w-5fwx-jx9f
+    package:
+      name: PyJWT
+      type: python
+  - vulnerability: CVE-2026-32597
+    package:
+      name: PyJWT
+      type: python
+  # orjson transitive dep via homeassistant
+  - vulnerability: CVE-2025-67221
+    package:
+      name: orjson
+      type: python

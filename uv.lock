@@ -1375,12 +1375,22 @@ wheels = [
 
 [[package]]
 name = "homeassistant-turnovercal"
-version = "0.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "homeassistant", version = "2026.2.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14.2'" },
     { name = "homeassistant", version = "2026.3.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14.2'" },
     { name = "icalendar" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "freezegun" },
+    { name = "pytest" },
+    { name = "pytest-aiohttp" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-homeassistant-custom-component", version = "0.13.316", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14.2'" },
+    { name = "pytest-homeassistant-custom-component", version = "0.13.318", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14.2'" },
 ]
 
 [package.dev-dependencies]
@@ -1396,9 +1406,16 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "freezegun", marker = "extra == 'test'", specifier = ">=1.5" },
     { name = "homeassistant", specifier = ">=2026.2.0" },
     { name = "icalendar", specifier = ">=6.1.0" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "pytest-aiohttp", marker = "extra == 'test'", specifier = ">=1.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.24" },
+    { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=6.0" },
+    { name = "pytest-homeassistant-custom-component", marker = "extra == 'test'", specifier = ">=0.13" },
 ]
+provides-extras = ["test"]
 
 [package.metadata.requires-dev]
 dev = [
