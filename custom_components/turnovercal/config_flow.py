@@ -14,6 +14,14 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.selector import (
+    BooleanSelector,
+    EntitySelector,
+    EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+)
 
 from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
@@ -26,6 +34,7 @@ from custom_components.turnovercal.const import (
     CONF_SUMMARY_PREFIX,
     CONF_TRAILING_DURATION_HOURS,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_CLEANING_CODE_SLOT_MAX,
     DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
     DEFAULT_LOCK_MONITORING,
     DEFAULT_RETENTION_WEEKS,
@@ -33,11 +42,26 @@ from custom_components.turnovercal.const import (
     DEFAULT_TRAILING_DURATION_HOURS,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    KEYMASTER_DOMAIN,
 )
 from custom_components.turnovercal.token import generate_token
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigFlowResult
+    from homeassistant.core import HomeAssistant
+
+
+def _keymaster_available(hass: HomeAssistant) -> bool:
+    """Check if keymaster integration is configured.
+
+    Args:
+        hass: Home Assistant instance.
+
+    Returns:
+        True if at least one keymaster config entry exists.
+
+    """
+    return len(hass.config_entries.async_entries(KEYMASTER_DOMAIN)) > 0
 
 
 class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -45,11 +69,16 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    def _validate_input(
+    def __init__(self) -> None:
+        """Initialize config flow."""
+        super().__init__()
+        self._user_data: dict[str, Any] = {}
+
+    def _validate_calendar(
         self,
         user_input: dict[str, Any],
     ) -> dict[str, str]:
-        """Validate user input and return errors dict.
+        """Validate calendar entity input.
 
         Args:
             user_input: The submitted form data.
@@ -59,9 +88,9 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
 
         """
         errors: dict[str, str] = {}
-        entity_id = user_input[CONF_CALENDAR_ENTITY]
+        entity_id = user_input.get(CONF_CALENDAR_ENTITY, "")
 
-        if not entity_id.startswith("calendar."):
+        if not entity_id or not entity_id.startswith("calendar."):
             errors[CONF_CALENDAR_ENTITY] = "invalid_entity"
         else:
             registry = er.async_get(self.hass)
@@ -69,22 +98,36 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
             if entry is None:
                 errors[CONF_CALENDAR_ENTITY] = "invalid_entity"
 
-        if not errors:
-            lock_monitoring = bool(
-                user_input.get(
-                    CONF_LOCK_MONITORING,
-                    DEFAULT_LOCK_MONITORING,
-                ),
-            )
-            if lock_monitoring:
-                lock_entity = user_input.get(CONF_LOCK_ENTITY)
-                if not lock_entity or not lock_entity.startswith("lock."):
-                    errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
-                slot = user_input.get(CONF_CLEANING_CODE_SLOT)
-                if slot is None:
-                    errors[CONF_CLEANING_CODE_SLOT] = "slot_required"
-                elif slot < 1:
-                    errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
+        return errors
+
+    @staticmethod
+    def _validate_lock(
+        user_input: dict[str, Any],
+    ) -> dict[str, str]:
+        """Validate lock step input.
+
+        Args:
+            user_input: The submitted form data.
+
+        Returns:
+            Dictionary of field → error key (empty if valid).
+
+        """
+        errors: dict[str, str] = {}
+
+        lock_entity = user_input.get(CONF_LOCK_ENTITY)
+        if not lock_entity or not lock_entity.startswith("lock."):
+            errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
+
+        slot = user_input.get(CONF_CLEANING_CODE_SLOT)
+        if slot is None:
+            errors[CONF_CLEANING_CODE_SLOT] = "slot_required"
+        elif (
+            isinstance(slot, bool)
+            or not isinstance(slot, (int, float))
+            or int(slot) < 1
+        ):
+            errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
 
         return errors
 
@@ -94,9 +137,9 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle the initial setup step.
 
-        Presents a form for entering the calendar entity ID
-        and optional lock monitoring settings. Generates a feed
-        token and creates the config entry.
+        Presents a form for selecting the calendar entity and
+        optionally enabling lock monitoring. Routes to the lock
+        step when lock monitoring is enabled.
 
         Args:
             user_input: User-submitted form data or None on first show.
@@ -108,20 +151,12 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            entity_id = user_input[CONF_CALENDAR_ENTITY]
-            errors = self._validate_input(user_input)
+            errors = self._validate_calendar(user_input)
 
             if not errors:
-                # Check for duplicate
+                entity_id = user_input[CONF_CALENDAR_ENTITY]
                 await self.async_set_unique_id(entity_id)
                 self._abort_if_unique_id_configured()
-
-                # Derive property name from entity friendly name
-                friendly = entity_id
-                state = self.hass.states.get(entity_id)
-                if state is not None:
-                    friendly = state.attributes.get("friendly_name", entity_id)
-                property_name = friendly.removeprefix("Rental Control ")
 
                 lock_monitoring = bool(
                     user_input.get(
@@ -130,44 +165,134 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
                     ),
                 )
 
-                token = generate_token()
-
-                data: dict[str, Any] = {
+                self._user_data = {
                     CONF_CALENDAR_ENTITY: entity_id,
-                    "feed_token": token,
                     CONF_LOCK_MONITORING: lock_monitoring,
                 }
 
                 if lock_monitoring:
-                    data[CONF_LOCK_ENTITY] = user_input[CONF_LOCK_ENTITY]
-                    data[CONF_CLEANING_CODE_SLOT] = user_input[CONF_CLEANING_CODE_SLOT]
+                    return await self.async_step_lock()
 
-                options: dict[str, Any] = {
-                    CONF_PROPERTY_NAME: property_name,
-                }
+                return self._create_entry()
 
-                return self.async_create_entry(
-                    title=property_name,
-                    data=data,
-                    options=options,
-                )
+        schema_dict: dict[vol.Marker, Any] = {
+            vol.Required(CONF_CALENDAR_ENTITY): EntitySelector(
+                EntitySelectorConfig(
+                    domain="calendar",
+                    integration="rental_control",
+                ),
+            ),
+        }
 
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_CALENDAR_ENTITY): str,
+        if _keymaster_available(self.hass):
+            schema_dict[
                 vol.Optional(
                     CONF_LOCK_MONITORING,
                     default=DEFAULT_LOCK_MONITORING,
-                ): bool,
-                vol.Optional(CONF_LOCK_ENTITY): str,
-                vol.Optional(CONF_CLEANING_CODE_SLOT): int,
-            }
-        )
+                )
+            ] = BooleanSelector()
 
         return self.async_show_form(
             step_id="user",
+            data_schema=vol.Schema(schema_dict),
+            errors=errors,
+        )
+
+    async def async_step_lock(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Handle the lock configuration step.
+
+        Presents a form for selecting the lock entity and
+        cleaning code slot number when lock monitoring is enabled.
+
+        Args:
+            user_input: User-submitted form data or None on first show.
+
+        Returns:
+            ConfigFlowResult with form or created entry.
+
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            errors = self._validate_lock(user_input)
+
+            if not errors:
+                self._user_data[CONF_LOCK_ENTITY] = user_input[CONF_LOCK_ENTITY]
+                self._user_data[CONF_CLEANING_CODE_SLOT] = int(
+                    user_input[CONF_CLEANING_CODE_SLOT],
+                )
+                return self._create_entry()
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_LOCK_ENTITY): EntitySelector(
+                    EntitySelectorConfig(
+                        domain="lock",
+                        integration=KEYMASTER_DOMAIN,
+                    ),
+                ),
+                vol.Required(CONF_CLEANING_CODE_SLOT): NumberSelector(
+                    NumberSelectorConfig(
+                        min=1,
+                        max=DEFAULT_CLEANING_CODE_SLOT_MAX,
+                        mode=NumberSelectorMode.BOX,
+                    ),
+                ),
+            },
+        )
+
+        return self.async_show_form(
+            step_id="lock",
             data_schema=schema,
             errors=errors,
+        )
+
+    def _create_entry(self) -> ConfigFlowResult:
+        """Create the config entry from collected data.
+
+        Derives the property name from the entity friendly name,
+        generates a feed token, and builds the data and options
+        dictionaries for the config entry.
+
+        Returns:
+            ConfigFlowResult for the created entry.
+
+        """
+        entity_id = self._user_data[CONF_CALENDAR_ENTITY]
+        lock_monitoring = self._user_data.get(
+            CONF_LOCK_MONITORING,
+            DEFAULT_LOCK_MONITORING,
+        )
+
+        friendly = entity_id
+        state = self.hass.states.get(entity_id)
+        if state is not None:
+            friendly = state.attributes.get("friendly_name", entity_id)
+        property_name = friendly.removeprefix("Rental Control ")
+
+        token = generate_token()
+
+        data: dict[str, Any] = {
+            CONF_CALENDAR_ENTITY: entity_id,
+            "feed_token": token,
+            CONF_LOCK_MONITORING: lock_monitoring,
+        }
+
+        if lock_monitoring:
+            data[CONF_LOCK_ENTITY] = self._user_data[CONF_LOCK_ENTITY]
+            data[CONF_CLEANING_CODE_SLOT] = self._user_data[CONF_CLEANING_CODE_SLOT]
+
+        options: dict[str, Any] = {
+            CONF_PROPERTY_NAME: property_name,
+        }
+
+        return self.async_create_entry(
+            title=property_name,
+            data=data,
+            options=options,
         )
 
     @staticmethod
@@ -192,6 +317,7 @@ class TurnoverCalOptionsFlow(OptionsFlow):
     def __init__(self) -> None:
         """Initialize options flow."""
         self._pending_options: dict[str, Any] = {}
+        self._regen_token: bool = False
 
     async def async_step_init(
         self,
@@ -199,8 +325,9 @@ class TurnoverCalOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Handle the initial options step.
 
-        Presents a form with all configurable options. Validates
-        numeric ranges and routes to token regeneration if requested.
+        Presents a form with general configurable options. Routes
+        to the lock step when lock monitoring is enabled, or to
+        the token regeneration step if requested.
 
         Args:
             user_input: User-submitted form data or None on first show.
@@ -212,78 +339,178 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            errors = self._validate_options(user_input)
+            errors = self._validate_init_options(user_input)
             if not errors:
-                regen = user_input.pop("regenerate_token", False)
-                if regen:
-                    self._pending_options = user_input
+                self._regen_token = bool(
+                    user_input.pop("regenerate_token", False),
+                )
+
+                keymaster = _keymaster_available(self.hass)
+                lock_monitoring = bool(
+                    user_input.pop(CONF_LOCK_MONITORING, False),
+                )
+
+                if not keymaster:
+                    lock_monitoring = False
+
+                self._pending_options = dict(user_input)
+                self._pending_options[CONF_LOCK_MONITORING] = lock_monitoring
+
+                if lock_monitoring:
+                    return await self.async_step_lock()
+
+                if self._regen_token:
                     return await self.async_step_confirm_regen()
-                return self.async_create_entry(data=user_input)
+
+                return self.async_create_entry(
+                    data=self._pending_options,
+                )
 
         opts = self.config_entry.options
+        data = self.config_entry.data
         defaults = user_input or opts
-        schema = vol.Schema(
-            {
-                vol.Required(
+
+        schema_dict: dict[vol.Marker, Any] = {
+            vol.Required(
+                CONF_RETENTION_WEEKS,
+                default=defaults.get(
                     CONF_RETENTION_WEEKS,
-                    default=defaults.get(
-                        CONF_RETENTION_WEEKS,
-                        DEFAULT_RETENTION_WEEKS,
-                    ),
-                ): int,
-                vol.Required(
+                    DEFAULT_RETENTION_WEEKS,
+                ),
+            ): int,
+            vol.Required(
+                CONF_SUMMARY_PREFIX,
+                default=defaults.get(
                     CONF_SUMMARY_PREFIX,
-                    default=defaults.get(
-                        CONF_SUMMARY_PREFIX,
-                        DEFAULT_SUMMARY_PREFIX,
-                    ),
-                ): str,
-                vol.Required(
-                    CONF_PROPERTY_NAME,
-                    default=defaults.get(CONF_PROPERTY_NAME, ""),
-                ): str,
-                vol.Required(
+                    DEFAULT_SUMMARY_PREFIX,
+                ),
+            ): str,
+            vol.Required(
+                CONF_PROPERTY_NAME,
+                default=defaults.get(CONF_PROPERTY_NAME, ""),
+            ): str,
+            vol.Required(
+                CONF_TRAILING_DURATION_HOURS,
+                default=defaults.get(
                     CONF_TRAILING_DURATION_HOURS,
-                    default=defaults.get(
-                        CONF_TRAILING_DURATION_HOURS,
-                        DEFAULT_TRAILING_DURATION_HOURS,
-                    ),
-                ): int,
-                vol.Required(
-                    CONF_EARLY_UNLOCK_GRACE_HOURS,
-                    default=defaults.get(
-                        CONF_EARLY_UNLOCK_GRACE_HOURS,
-                        DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
-                    ),
-                ): int,
-                vol.Required(
+                    DEFAULT_TRAILING_DURATION_HOURS,
+                ),
+            ): int,
+            vol.Required(
+                CONF_UPDATE_INTERVAL,
+                default=defaults.get(
                     CONF_UPDATE_INTERVAL,
-                    default=defaults.get(
-                        CONF_UPDATE_INTERVAL,
-                        DEFAULT_UPDATE_INTERVAL,
-                    ),
-                ): int,
+                    DEFAULT_UPDATE_INTERVAL,
+                ),
+            ): int,
+            vol.Optional("regenerate_token", default=False): bool,
+        }
+
+        if _keymaster_available(self.hass):
+            current_lock = opts.get(
+                CONF_LOCK_MONITORING,
+                data.get(CONF_LOCK_MONITORING, DEFAULT_LOCK_MONITORING),
+            )
+            schema_dict[
                 vol.Optional(
                     CONF_LOCK_MONITORING,
                     default=defaults.get(
                         CONF_LOCK_MONITORING,
-                        DEFAULT_LOCK_MONITORING,
+                        current_lock,
                     ),
-                ): bool,
-                vol.Optional(
-                    CONF_LOCK_ENTITY,
-                    default=defaults.get(CONF_LOCK_ENTITY, ""),
-                ): str,
-                vol.Optional(
-                    CONF_CLEANING_CODE_SLOT,
-                    default=defaults.get(CONF_CLEANING_CODE_SLOT, 0),
-                ): int,
-                vol.Optional("regenerate_token", default=False): bool,
-            }
-        )
+                )
+            ] = BooleanSelector()
 
         return self.async_show_form(
             step_id="init",
+            data_schema=vol.Schema(schema_dict),
+            errors=errors,
+        )
+
+    async def async_step_lock(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Handle lock configuration options step.
+
+        Presents a form for lock entity, cleaning code slot,
+        and early unlock grace hours. Routes to token
+        regeneration if requested, otherwise saves options.
+
+        Args:
+            user_input: User-submitted form data or None on first show.
+
+        Returns:
+            ConfigFlowResult with form or created entry.
+
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            errors = self._validate_lock_options(user_input)
+
+            if not errors:
+                self._pending_options[CONF_LOCK_ENTITY] = user_input[CONF_LOCK_ENTITY]
+                self._pending_options[CONF_CLEANING_CODE_SLOT] = int(
+                    user_input[CONF_CLEANING_CODE_SLOT],
+                )
+                self._pending_options[CONF_EARLY_UNLOCK_GRACE_HOURS] = int(
+                    user_input[CONF_EARLY_UNLOCK_GRACE_HOURS],
+                )
+
+                if self._regen_token:
+                    return await self.async_step_confirm_regen()
+
+                return self.async_create_entry(
+                    data=self._pending_options,
+                )
+
+        opts = self.config_entry.options
+        data = self.config_entry.data
+
+        lock_entity_default = opts.get(
+            CONF_LOCK_ENTITY,
+            data.get(CONF_LOCK_ENTITY, ""),
+        )
+        slot_default = opts.get(
+            CONF_CLEANING_CODE_SLOT,
+            data.get(CONF_CLEANING_CODE_SLOT, 1),
+        )
+        grace_default = opts.get(
+            CONF_EARLY_UNLOCK_GRACE_HOURS,
+            DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
+        )
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_LOCK_ENTITY,
+                    default=lock_entity_default,
+                ): EntitySelector(
+                    EntitySelectorConfig(
+                        domain="lock",
+                        integration=KEYMASTER_DOMAIN,
+                    ),
+                ),
+                vol.Required(
+                    CONF_CLEANING_CODE_SLOT,
+                    default=slot_default,
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=1,
+                        max=DEFAULT_CLEANING_CODE_SLOT_MAX,
+                        mode=NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Required(
+                    CONF_EARLY_UNLOCK_GRACE_HOURS,
+                    default=grace_default,
+                ): int,
+            },
+        )
+
+        return self.async_show_form(
+            step_id="lock",
             data_schema=schema,
             errors=errors,
         )
@@ -337,10 +564,10 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         return self.async_create_entry(data=self._pending_options)
 
     @staticmethod
-    def _validate_options(
+    def _validate_init_options(
         user_input: dict[str, Any],
     ) -> dict[str, str]:
-        """Validate option ranges and return errors dict.
+        """Validate init step option ranges.
 
         Args:
             user_input: The submitted form data.
@@ -353,7 +580,6 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         _max_retention = 52
         _max_trailing = 24
         _max_interval = 60
-        _max_grace = 12
 
         def _is_int(val: object) -> bool:
             """Check if value is int but not bool."""
@@ -371,25 +597,45 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         if not _is_int(interval) or interval < 1 or interval > _max_interval:
             errors[CONF_UPDATE_INTERVAL] = "invalid_range"
 
+        return errors
+
+    @staticmethod
+    def _validate_lock_options(
+        user_input: dict[str, Any],
+    ) -> dict[str, str]:
+        """Validate lock step option values.
+
+        Args:
+            user_input: The submitted form data.
+
+        Returns:
+            Dictionary of field → error key (empty if valid).
+
+        """
+        errors: dict[str, str] = {}
+        _max_grace = 12
+
+        def _is_int(val: object) -> bool:
+            """Check if value is int but not bool."""
+            return isinstance(val, int) and not isinstance(val, bool)
+
+        lock_entity = user_input.get(CONF_LOCK_ENTITY, "")
+        if not lock_entity or not lock_entity.startswith("lock."):
+            errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
+
+        slot = user_input.get(CONF_CLEANING_CODE_SLOT, 0)
+        if (
+            isinstance(slot, bool)
+            or not isinstance(slot, (int, float))
+            or int(slot) < 1
+        ):
+            errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
+
         grace = user_input.get(
             CONF_EARLY_UNLOCK_GRACE_HOURS,
             DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
         )
         if not _is_int(grace) or grace < 0 or grace > _max_grace:
             errors[CONF_EARLY_UNLOCK_GRACE_HOURS] = "invalid_range"
-
-        lock_monitoring = bool(
-            user_input.get(
-                CONF_LOCK_MONITORING,
-                DEFAULT_LOCK_MONITORING,
-            ),
-        )
-        if lock_monitoring:
-            lock_entity = user_input.get(CONF_LOCK_ENTITY, "")
-            if not lock_entity or not lock_entity.startswith("lock."):
-                errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
-            slot = user_input.get(CONF_CLEANING_CODE_SLOT, 0)
-            if not _is_int(slot) or slot < 1:
-                errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
 
         return errors

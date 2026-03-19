@@ -6,13 +6,21 @@
         "description": "Configure a TurnoverCal instance to generate turnover calendars from a Rental Control calendar.",
         "data": {
           "calendar_entity_id": "Rental Control calendar entity",
-          "lock_monitoring": "Enable lock monitoring",
+          "lock_monitoring": "Enable lock monitoring"
+        },
+        "data_description": {
+          "calendar_entity_id": "The Rental Control calendar entity to monitor for guest events.",
+          "lock_monitoring": "Monitor a Keymaster-managed lock for cleaning code slot changes."
+        }
+      },
+      "lock": {
+        "title": "Lock Configuration",
+        "description": "Configure Keymaster lock monitoring settings.",
+        "data": {
           "lock_entity_id": "Lock entity",
           "cleaning_code_slot": "Cleaning code slot number"
         },
         "data_description": {
-          "calendar_entity_id": "The Rental Control calendar entity to monitor for guest events.",
-          "lock_monitoring": "Monitor a Keymaster-managed lock for cleaning code slot changes.",
           "lock_entity_id": "The lock entity managed by Keymaster.",
           "cleaning_code_slot": "The lock code slot number assigned to the cleaning crew."
         }
@@ -38,10 +46,7 @@
           "summary_prefix": "Summary prefix",
           "property_name": "Property name",
           "trailing_duration_hours": "Trailing duration (hours)",
-          "early_unlock_grace_hours": "Early unlock grace (hours)",
           "update_interval": "Update interval (minutes)",
-          "lock_entity_id": "Lock entity",
-          "cleaning_code_slot": "Cleaning code slot number",
           "lock_monitoring": "Enable lock monitoring",
           "regenerate_token": "Regenerate feed token"
         },
@@ -50,12 +55,23 @@
           "summary_prefix": "Prefix added to turnover calendar event summaries.",
           "property_name": "Name of the property for event descriptions.",
           "trailing_duration_hours": "Hours after checkout to extend the turnover window.",
-          "early_unlock_grace_hours": "Hours before check-in to unlock the door early.",
           "update_interval": "Minutes between calendar update checks.",
-          "lock_entity_id": "The lock entity managed by Keymaster.",
-          "cleaning_code_slot": "The lock code slot number assigned to the cleaning crew.",
           "lock_monitoring": "Monitor a Keymaster-managed lock for cleaning code slot changes.",
           "regenerate_token": "Generate a new feed token, invalidating the current URL."
+        }
+      },
+      "lock": {
+        "title": "Lock Configuration",
+        "description": "Configure Keymaster lock monitoring settings.",
+        "data": {
+          "lock_entity_id": "Lock entity",
+          "cleaning_code_slot": "Cleaning code slot number",
+          "early_unlock_grace_hours": "Early unlock grace (hours)"
+        },
+        "data_description": {
+          "lock_entity_id": "The lock entity managed by Keymaster.",
+          "cleaning_code_slot": "The lock code slot number assigned to the cleaning crew.",
+          "early_unlock_grace_hours": "Hours before check-in to unlock the door early."
         }
       },
       "confirm_regen": {
