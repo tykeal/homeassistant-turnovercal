@@ -8,6 +8,8 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import icalendar
+
 from custom_components.turnovercal.calendar import generate_ical
 from custom_components.turnovercal.models import TurnoverEvent
 
@@ -301,3 +303,91 @@ class TestICalEdgeCases:
             property_name="Beach House",
         )
         assert isinstance(data, bytes)
+
+
+# ---------------------------------------------------------------------------
+# RFC 5545 round-trip validation
+# ---------------------------------------------------------------------------
+
+
+class TestRFC5545RoundTrip:
+    """Validate iCal output parses back as valid RFC 5545."""
+
+    def test_empty_calendar_parses(self) -> None:
+        """Empty calendar round-trips through icalendar."""
+        data = generate_ical(
+            events=[],
+            timezone_str="America/New_York",
+            summary_prefix="Turnover",
+            property_name="Beach House",
+        )
+        cal = icalendar.Calendar.from_ical(data.decode("utf-8"))
+        assert cal["PRODID"] == ("-//Home Assistant//TurnoverCal//EN")
+        assert cal["VERSION"] == "2.0"
+
+    def test_single_event_round_trip(self) -> None:
+        """Single event round-trips with all required props."""
+        evt = _make_event()
+        data = generate_ical(
+            events=[evt],
+            timezone_str="America/New_York",
+            summary_prefix="Turnover",
+            property_name="Beach House",
+        )
+        cal = icalendar.Calendar.from_ical(data.decode("utf-8"))
+        vevents = [c for c in cal.walk() if c.name == "VEVENT"]
+        assert len(vevents) == 1
+        vevent = vevents[0]
+        assert str(vevent["UID"]) == VALID_UID
+        assert "DTSTAMP" in vevent
+        assert "DTSTART" in vevent
+        assert "DTEND" in vevent
+        assert str(vevent["SUMMARY"]) == ("Turnover - Beach House")
+
+    def test_multiple_events_round_trip(self) -> None:
+        """Multiple events parse back correctly."""
+        evt1 = _make_event(VALID_UID)
+        evt2 = _make_event(
+            VALID_UID_2,
+            dtstart=datetime(
+                2026,
+                3,
+                15,
+                11,
+                0,
+                tzinfo=ET,
+            ),
+            dtend=datetime(
+                2026,
+                3,
+                15,
+                15,
+                0,
+                tzinfo=ET,
+            ),
+        )
+        data = generate_ical(
+            events=[evt1, evt2],
+            timezone_str="America/New_York",
+            summary_prefix="Turnover",
+            property_name="Beach House",
+        )
+        cal = icalendar.Calendar.from_ical(data.decode("utf-8"))
+        vevents = [c for c in cal.walk() if c.name == "VEVENT"]
+        assert len(vevents) == 2
+        uids = {str(v["UID"]) for v in vevents}
+        assert uids == {VALID_UID, VALID_UID_2}
+
+    def test_dtstamp_is_utc(self) -> None:
+        """DTSTAMP is UTC per RFC 5545 section 3.8.7.2."""
+        evt = _make_event()
+        data = generate_ical(
+            events=[evt],
+            timezone_str="America/New_York",
+            summary_prefix="Turnover",
+            property_name="Beach House",
+        )
+        cal = icalendar.Calendar.from_ical(data.decode("utf-8"))
+        vevents = [c for c in cal.walk() if c.name == "VEVENT"]
+        dtstamp = vevents[0]["DTSTAMP"].dt
+        assert str(dtstamp.tzinfo) == "UTC"
