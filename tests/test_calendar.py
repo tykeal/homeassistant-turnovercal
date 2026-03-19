@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import icalendar
@@ -390,4 +390,4 @@ class TestRFC5545RoundTrip:
         cal = icalendar.Calendar.from_ical(data.decode("utf-8"))
         vevents = [c for c in cal.walk() if c.name == "VEVENT"]
         dtstamp = vevents[0]["DTSTAMP"].dt
-        assert str(dtstamp.tzinfo) == "UTC"
+        assert dtstamp.utcoffset() == timedelta(0)
