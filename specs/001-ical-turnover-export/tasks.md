@@ -226,15 +226,15 @@ Acceptance scenarios 4-1 through 4-4 pass.
 
 <!-- markdownlint-disable MD013 -->
 
-- [ ] T046 [P] Run `uv run ruff check custom_components/ tests/` and fix all linting issues
-- [ ] T047 [P] Run `uv run mypy custom_components/turnovercal/` and fix all type errors (full type annotations required)
-- [ ] T048 [P] Run `uv run interrogate -vv --fail-under=100 custom_components/turnovercal/` and add missing docstrings
-- [ ] T049 [P] Run full test suite with coverage: `uv run pytest tests/ --cov=custom_components/turnovercal --cov-report=term-missing` and verify all tests pass
-- [ ] T050 Validate iCal output against RFC 5545 by subscribing to feed in Google Calendar, Apple Calendar, and Outlook per SC-003
-- [ ] T051 Performance check: verify iCal feed responds within 2 seconds with 52 weeks of cached events per SC-008
-- [ ] T052 Security review: verify token is redacted from logs/diagnostics, `hmac.compare_digest()` used for all token comparisons, no PII in summaries per FR-014
-- [ ] T053 Run `uv run pre-commit run --all-files` to validate all hooks pass
-- [ ] T054 Validate quickstart.md against actual repository state — confirm all commands work
+- [X] T046 [P] Run `uv run ruff check custom_components/ tests/` and fix all linting issues
+- [X] T047 [P] Run `uv run mypy custom_components/turnovercal/` and fix all type errors (full type annotations required)
+- [X] T048 [P] Run `uv run interrogate -vv --fail-under=100 custom_components/turnovercal/` and add missing docstrings
+- [X] T049 [P] Run full test suite with coverage: `uv run pytest tests/ --cov=custom_components/turnovercal --cov-report=term-missing` and verify all tests pass
+- [X] T050 Validate iCal output against RFC 5545 by subscribing to feed in Google Calendar, Apple Calendar, and Outlook per SC-003
+- [X] T051 Performance check: verify iCal feed responds within 2 seconds with 52 weeks of cached events per SC-008
+- [X] T052 Security review: verify token is redacted from logs/diagnostics, `hmac.compare_digest()` used for all token comparisons, no PII in summaries per FR-014
+- [X] T053 Run `uv run pre-commit run --all-files` to validate all hooks pass
+- [X] T054 Validate quickstart.md against actual repository state — confirm all commands work
 
 <!-- markdownlint-enable MD013 -->
 
