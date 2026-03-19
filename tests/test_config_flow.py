@@ -1354,6 +1354,151 @@ class TestOptionsFlowLockSettings:
                 },
             )
 
+    async def test_options_lock_step_non_keymaster_device_rejected(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Options lock step rejects device not linked to keymaster."""
+        _register_keymaster(hass)
+        entry = self._create_entry_with_lock(hass)
+
+        device_reg = dr.async_get(hass)
+        other_entry = MockConfigEntry(
+            domain="zwave_js",
+            data={},
+            title="Z-Wave",
+        )
+        other_entry.add_to_hass(hass)
+        other_device = device_reg.async_get_or_create(
+            config_entry_id=other_entry.entry_id,
+            identifiers={("zwave_js", "node1")},
+            name="Some Lock",
+        )
+
+        result = await hass.config_entries.options.async_init(
+            entry.entry_id,
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                CONF_PROPERTY_NAME: "Beach House",
+                CONF_LOCK_MONITORING: True,
+            },
+        )
+
+        assert result["step_id"] == "lock"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_KEYMASTER_DEVICE: other_device.id,
+                CONF_CLEANING_CODE_SLOT: 4,
+                CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_KEYMASTER_DEVICE in result["errors"]
+
+    async def test_options_lock_step_missing_lock_entity_rejected(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Options lock step rejects keymaster device without lock_entity_id."""
+        mock_integration(
+            hass,
+            MockModule(
+                "keymaster",
+                async_setup=_noop_async_setup,
+                async_setup_entry=_noop_async_setup,
+            ),
+            built_in=False,
+        )
+        km_entry = MockConfigEntry(
+            domain="keymaster",
+            data={"lockname": "front_door"},
+            title="Front Door Lock",
+        )
+        km_entry.add_to_hass(hass)
+        device_reg = dr.async_get(hass)
+        device = device_reg.async_get_or_create(
+            config_entry_id=km_entry.entry_id,
+            identifiers={("keymaster", km_entry.entry_id)},
+            name=km_entry.title,
+        )
+
+        entry = self._create_entry_with_lock(hass)
+
+        result = await hass.config_entries.options.async_init(
+            entry.entry_id,
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                CONF_PROPERTY_NAME: "Beach House",
+                CONF_LOCK_MONITORING: True,
+            },
+        )
+
+        assert result["step_id"] == "lock"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_KEYMASTER_DEVICE: device.id,
+                CONF_CLEANING_CODE_SLOT: 4,
+                CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_KEYMASTER_DEVICE in result["errors"]
+
+    async def test_options_lock_step_nonexistent_device_rejected(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Options lock step rejects nonexistent device ID."""
+        _register_keymaster(hass)
+        entry = self._create_entry_with_lock(hass)
+
+        result = await hass.config_entries.options.async_init(
+            entry.entry_id,
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                CONF_PROPERTY_NAME: "Beach House",
+                CONF_LOCK_MONITORING: True,
+            },
+        )
+
+        assert result["step_id"] == "lock"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_KEYMASTER_DEVICE: "nonexistent-device-id",
+                CONF_CLEANING_CODE_SLOT: 4,
+                CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_KEYMASTER_DEVICE in result["errors"]
+
     async def test_keymaster_removed_forces_lock_off(self, hass: HomeAssistant) -> None:
         """Lock monitoring forced off when keymaster removed."""
         entry = self._create_entry_with_lock(hass)
