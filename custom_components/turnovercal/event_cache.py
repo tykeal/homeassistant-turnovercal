@@ -165,6 +165,7 @@ class EventCache:
             token: The new feed token value.
 
         """
+        self._feed_token = token
         if self._data is None:
             await self.async_load()
         if self._data is None:
