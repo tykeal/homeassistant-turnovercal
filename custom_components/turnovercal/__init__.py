@@ -35,6 +35,10 @@ from custom_components.turnovercal.const import (
 from custom_components.turnovercal.coordinator import TurnoverCoordinator
 from custom_components.turnovercal.event_cache import EventCache
 from custom_components.turnovercal.http_view import TurnoverCalView
+from custom_components.turnovercal.services import (
+    async_setup_services,
+    async_unload_services,
+)
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -138,6 +142,9 @@ async def async_setup_entry(
     # Start coordinator
     await coordinator.async_config_entry_first_refresh()
 
+    # Register services (idempotent)
+    await async_setup_services(hass)
+
     # Register Keymaster listener if lock monitoring is enabled
     if lock_monitoring and lock_entity_id:
         unsub_lock = hass.bus.async_listen(
@@ -209,4 +216,9 @@ async def async_unload_entry(
     if coordinator is not None:
         await coordinator.async_shutdown()
     domain_data.pop(entry.entry_id, None)
+
+    # Unregister services when last entry is unloaded
+    if not domain_data:
+        await async_unload_services(hass)
+
     return True

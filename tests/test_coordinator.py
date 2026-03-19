@@ -603,12 +603,12 @@ def _make_event(  # noqa: PLR0913
 
 
 # ---------------------------------------------------------------------------
-# T033: Tests for _apply_cleaning_signal
+# T033: Tests for apply_cleaning_signal
 # ---------------------------------------------------------------------------
 
 
 class TestApplyCleaningSignal:
-    """Tests for _apply_cleaning_signal method."""
+    """Tests for apply_cleaning_signal method."""
 
     async def test_different_day_shortens_dtend(self, hass: HomeAssistant) -> None:
         """Different-day unlock shortens DTEND to 00:00 next day."""
@@ -618,7 +618,7 @@ class TestApplyCleaningSignal:
 
         # Unlock 3/10 14:30 ET = 18:30 UTC
         unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock)
 
         assert event.dtend == datetime(2026, 3, 11, 0, 0, tzinfo=ET)
 
@@ -630,7 +630,7 @@ class TestApplyCleaningSignal:
 
         # Unlock 3/10 12:00 ET = 16:00 UTC
         unlock = datetime(2026, 3, 10, 16, 0, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock)
 
         assert event.dtend == _dt(10, 15)
 
@@ -641,7 +641,7 @@ class TestApplyCleaningSignal:
         coordinator = _make_coordinator(hass, cache)
 
         unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock)
 
         assert event.adjusted_by_lock is True
 
@@ -652,7 +652,7 @@ class TestApplyCleaningSignal:
         coordinator = _make_coordinator(hass, cache)
 
         unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock)
 
         assert event.lock_unlock_time == unlock
 
@@ -663,7 +663,7 @@ class TestApplyCleaningSignal:
         coordinator = _make_coordinator(hass, cache)
 
         unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock)
 
         assert event.adjustment_source == "keymaster"
 
@@ -675,7 +675,7 @@ class TestApplyCleaningSignal:
         coordinator = _make_coordinator(hass, cache)
 
         unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock)
 
         assert event.original_dtend == original
 
@@ -686,7 +686,7 @@ class TestApplyCleaningSignal:
         coordinator = _make_coordinator(hass, cache)
 
         unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock)
 
         assert event.status == "adjusted"
 
@@ -697,13 +697,13 @@ class TestApplyCleaningSignal:
         coordinator = _make_coordinator(hass, cache)
 
         unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock)
 
         dtend_after = event.dtend
         cache.async_add_event.reset_mock()
 
         unlock2 = datetime(2026, 3, 10, 19, 0, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock2)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock2)
 
         assert event.dtend == dtend_after
         cache.async_add_event.assert_not_awaited()
@@ -715,7 +715,7 @@ class TestApplyCleaningSignal:
         coordinator = _make_coordinator(hass, cache)
 
         unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock)
 
         cache.async_add_event.assert_awaited_once_with(event)
 
@@ -725,7 +725,7 @@ class TestApplyCleaningSignal:
         coordinator = _make_coordinator(hass, cache)
 
         unlock = datetime(2026, 3, 10, 18, 30, tzinfo=UTC)
-        result = await coordinator._apply_cleaning_signal(  # noqa: SLF001
+        result = await coordinator.apply_cleaning_signal(
             unlock,
         )
 
@@ -749,7 +749,7 @@ class TestEarlyUnlockGracePeriod:
 
         # Unlock 3/10 09:30 ET = 13:30 UTC (within 2hr grace)
         unlock = datetime(2026, 3, 10, 13, 30, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock)
 
         expected = datetime(2026, 3, 10, 9, 30, tzinfo=ET)
         assert event.dtstart == expected
@@ -762,7 +762,7 @@ class TestEarlyUnlockGracePeriod:
 
         # Unlock 3/10 08:00 ET = 12:00 UTC (>2hr before 11:00)
         unlock = datetime(2026, 3, 10, 12, 0, tzinfo=UTC)
-        result = await coordinator._apply_cleaning_signal(  # noqa: SLF001
+        result = await coordinator.apply_cleaning_signal(
             unlock,
         )
 
@@ -777,7 +777,7 @@ class TestEarlyUnlockGracePeriod:
 
         # Unlock 3/10 10:00 ET = 14:00 UTC (would be in grace)
         unlock = datetime(2026, 3, 10, 14, 0, tzinfo=UTC)
-        result = await coordinator._apply_cleaning_signal(  # noqa: SLF001
+        result = await coordinator.apply_cleaning_signal(
             unlock,
         )
 
@@ -792,7 +792,7 @@ class TestEarlyUnlockGracePeriod:
         coordinator = _make_coordinator(hass, cache, grace_hours=2)
 
         unlock = datetime(2026, 3, 10, 13, 30, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock)
 
         assert event.original_dtstart == original
 
@@ -806,7 +806,7 @@ class TestEarlyUnlockGracePeriod:
 
         # Unlock 3/10 09:30 ET = 13:30 UTC
         unlock = datetime(2026, 3, 10, 13, 30, tzinfo=UTC)
-        await coordinator._apply_cleaning_signal(unlock)  # noqa: SLF001
+        await coordinator.apply_cleaning_signal(unlock)
 
         # DTSTART moved
         assert event.dtstart == datetime(2026, 3, 10, 9, 30, tzinfo=ET)
@@ -843,7 +843,7 @@ class TestKeymasterEventListener:
 
         with patch.object(
             coordinator,
-            "_apply_cleaning_signal",
+            "apply_cleaning_signal",
             create=True,
             new_callable=AsyncMock,
         ) as mock_signal:
@@ -871,7 +871,7 @@ class TestKeymasterEventListener:
 
         with patch.object(
             coordinator,
-            "_apply_cleaning_signal",
+            "apply_cleaning_signal",
             create=True,
             new_callable=AsyncMock,
         ) as mock_signal:
@@ -899,7 +899,7 @@ class TestKeymasterEventListener:
 
         with patch.object(
             coordinator,
-            "_apply_cleaning_signal",
+            "apply_cleaning_signal",
             create=True,
             new_callable=AsyncMock,
         ) as mock_signal:
@@ -907,7 +907,7 @@ class TestKeymasterEventListener:
             mock_signal.assert_not_awaited()
 
     async def test_correct_unlock_triggers_signal(self, hass: HomeAssistant) -> None:
-        """Correct unlock triggers _apply_cleaning_signal."""
+        """Correct unlock triggers apply_cleaning_signal."""
         cache = _make_cache_mock({})
         coordinator = _make_coordinator(
             hass,
@@ -927,7 +927,7 @@ class TestKeymasterEventListener:
 
         with patch.object(
             coordinator,
-            "_apply_cleaning_signal",
+            "apply_cleaning_signal",
             create=True,
             new_callable=AsyncMock,
         ) as mock_signal:

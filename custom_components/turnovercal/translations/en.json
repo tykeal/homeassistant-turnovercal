@@ -69,5 +69,19 @@
       "invalid_lock_entity": "Not a valid lock entity. Must start with 'lock.'.",
       "invalid_slot": "Cleaning code slot must be a positive number (1 or greater)."
     }
+  },
+  "exceptions": {
+    "ambiguous_target": {
+      "message": "Provide either an entity target or config_entry_id, not both."
+    },
+    "missing_target": {
+      "message": "Provide either an entity target or config_entry_id."
+    },
+    "entry_not_found": {
+      "message": "Config entry not found or not loaded."
+    },
+    "entity_not_found": {
+      "message": "No TurnoverCal entry found for the specified entity."
+    }
   }
 }

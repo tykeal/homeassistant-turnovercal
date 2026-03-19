@@ -31,6 +31,8 @@ if TYPE_CHECKING:
 class _CalendarEntityProtocol(Protocol):
     """Protocol for calendar entities that provide async_get_events."""
 
+    entity_id: str
+
     async def async_get_events(
         self,
         hass: HomeAssistant,
@@ -107,6 +109,16 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         self._lock_entity_id = lock_entity_id
         self._cleaning_code_slot = cleaning_code_slot
         self._grace_hours = grace_hours
+
+    @property
+    def calendar_entity_id(self) -> str:
+        """Return the monitored calendar entity ID."""
+        return self._calendar_entity.entity_id
+
+    @property
+    def cache_events(self) -> dict[str, TurnoverEvent]:
+        """Return current cached events."""
+        return self._cache.get_events()
 
     async def _async_update_data(
         self,
@@ -275,7 +287,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
                     return evt
         return None
 
-    async def _apply_cleaning_signal(
+    async def apply_cleaning_signal(
         self,
         now: datetime,
         source: str = "keymaster",
@@ -350,6 +362,6 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             return
 
         now = datetime.now(tz=ZoneInfo("UTC"))
-        adjusted = await self._apply_cleaning_signal(now)
+        adjusted = await self.apply_cleaning_signal(now)
         if adjusted:
             self.async_set_updated_data(self._cache.get_events())
