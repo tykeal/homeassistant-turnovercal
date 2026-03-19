@@ -58,6 +58,9 @@
         "description": "This will invalidate the current feed URL. All subscribed calendar clients will need the new URL.",
         "data": {}
       }
+    },
+    "error": {
+      "invalid_range": "Value is outside the allowed range."
     }
   }
 }
