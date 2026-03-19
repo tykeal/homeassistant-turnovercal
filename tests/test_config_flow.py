@@ -850,7 +850,7 @@ class TestOptionsFlowLockSettings:
         assert result["data"][CONF_EARLY_UNLOCK_GRACE_HOURS] == 4
 
     async def test_lock_monitoring_requires_slot(self, hass: HomeAssistant) -> None:
-        """Lock monitoring without code slot shows error."""
+        """Lock monitoring with invalid code slot shows error."""
         entry = self._create_entry_with_lock(hass)
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -864,6 +864,7 @@ class TestOptionsFlowLockSettings:
                 CONF_PROPERTY_NAME: "Beach House",
                 CONF_LOCK_MONITORING: True,
                 CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_CLEANING_CODE_SLOT: 0,
                 CONF_EARLY_UNLOCK_GRACE_HOURS: (DEFAULT_EARLY_UNLOCK_GRACE_HOURS),
             },
         )

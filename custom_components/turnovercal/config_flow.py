@@ -272,11 +272,12 @@ class TurnoverCalOptionsFlow(OptionsFlow):
                 ): bool,
                 vol.Optional(
                     CONF_LOCK_ENTITY,
-                    description={
-                        "suggested_value": defaults.get(CONF_LOCK_ENTITY, ""),
-                    },
+                    default=defaults.get(CONF_LOCK_ENTITY, ""),
                 ): str,
-                vol.Optional(CONF_CLEANING_CODE_SLOT): int,
+                vol.Optional(
+                    CONF_CLEANING_CODE_SLOT,
+                    default=defaults.get(CONF_CLEANING_CODE_SLOT, 0),
+                ): int,
                 vol.Optional("regenerate_token", default=False): bool,
             }
         )
@@ -384,13 +385,11 @@ class TurnoverCalOptionsFlow(OptionsFlow):
             ),
         )
         if lock_monitoring:
-            lock_entity = user_input.get(CONF_LOCK_ENTITY)
+            lock_entity = user_input.get(CONF_LOCK_ENTITY, "")
             if not lock_entity or not lock_entity.startswith("lock."):
                 errors[CONF_LOCK_ENTITY] = "invalid_entity"
-            slot = user_input.get(CONF_CLEANING_CODE_SLOT)
-            if slot is None:
-                errors[CONF_CLEANING_CODE_SLOT] = "slot_required"
-            elif not _is_int(slot) or slot < 1:
+            slot = user_input.get(CONF_CLEANING_CODE_SLOT, 0)
+            if not _is_int(slot) or slot < 1:
                 errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
 
         return errors
