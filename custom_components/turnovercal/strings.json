@@ -7,17 +7,20 @@
         "data": {
           "calendar_entity_id": "Rental Control calendar entity",
           "lock_monitoring": "Enable lock monitoring",
+          "lock_entity_id": "Lock entity",
           "cleaning_code_slot": "Cleaning code slot number"
         },
         "data_description": {
           "calendar_entity_id": "The Rental Control calendar entity to monitor for guest events.",
           "lock_monitoring": "Monitor a Keymaster-managed lock for cleaning code slot changes.",
+          "lock_entity_id": "The lock entity managed by Keymaster.",
           "cleaning_code_slot": "The lock code slot number assigned to the cleaning crew."
         }
       }
     },
     "error": {
       "invalid_entity": "Not a valid calendar entity or entity not found.",
+      "invalid_lock_entity": "Not a valid lock entity. Must start with 'lock.'.",
       "slot_required": "Cleaning code slot is required when lock monitoring is enabled.",
       "invalid_slot": "Cleaning code slot must be a positive number (1 or greater)."
     },
@@ -62,7 +65,9 @@
       }
     },
     "error": {
-      "invalid_range": "Value is outside the allowed range."
+      "invalid_range": "Value is outside the allowed range.",
+      "invalid_lock_entity": "Not a valid lock entity. Must start with 'lock.'.",
+      "invalid_slot": "Cleaning code slot must be a positive number (1 or greater)."
     }
   }
 }

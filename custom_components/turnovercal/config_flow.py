@@ -79,7 +79,7 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
             if lock_monitoring:
                 lock_entity = user_input.get(CONF_LOCK_ENTITY)
                 if not lock_entity or not lock_entity.startswith("lock."):
-                    errors[CONF_LOCK_ENTITY] = "invalid_entity"
+                    errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
                 slot = user_input.get(CONF_CLEANING_CODE_SLOT)
                 if slot is None:
                     errors[CONF_CLEANING_CODE_SLOT] = "slot_required"
@@ -387,7 +387,7 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         if lock_monitoring:
             lock_entity = user_input.get(CONF_LOCK_ENTITY, "")
             if not lock_entity or not lock_entity.startswith("lock."):
-                errors[CONF_LOCK_ENTITY] = "invalid_entity"
+                errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
             slot = user_input.get(CONF_CLEANING_CODE_SLOT, 0)
             if not _is_int(slot) or slot < 1:
                 errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"

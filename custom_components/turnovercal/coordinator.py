@@ -186,10 +186,45 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             existing = cached.get(evt.uid)
             if existing is not None:
                 if self._should_keep_adjustment(existing, evt):
+                    if self._merge_metadata(existing, evt):
+                        await self._cache.async_add_event(existing)
                     continue
                 if not _event_changed(existing, evt):
                     continue
             await self._cache.async_add_event(evt)
+
+    @staticmethod
+    def _merge_metadata(
+        adjusted: TurnoverEvent,
+        computed: TurnoverEvent,
+    ) -> bool:
+        """Copy non-time fields from computed into adjusted event.
+
+        Preserves lock-adjusted times and metadata while updating
+        source fields that may have changed (e.g. summary).
+
+        Args:
+            adjusted: The lock-adjusted cached event to update.
+            computed: The freshly computed event with current data.
+
+        Returns:
+            True if any field was changed.
+
+        """
+        changed = False
+        if adjusted.summary != computed.summary:
+            adjusted.summary = computed.summary
+            changed = True
+        if adjusted.source_checkout_id != computed.source_checkout_id:
+            adjusted.source_checkout_id = computed.source_checkout_id
+            changed = True
+        if adjusted.source_checkin_id != computed.source_checkin_id:
+            adjusted.source_checkin_id = computed.source_checkin_id
+            changed = True
+        if adjusted.is_trailing != computed.is_trailing:
+            adjusted.is_trailing = computed.is_trailing
+            changed = True
+        return changed
 
     @staticmethod
     def _should_keep_adjustment(
