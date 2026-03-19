@@ -151,6 +151,13 @@ async def async_setup_entry(
                 keymaster_device_id,
             )
             lock_monitoring = False
+    elif lock_monitoring:
+        _LOGGER.warning(
+            "Lock monitoring enabled for '%s' but no Keymaster "
+            "device configured. Lock monitoring will be disabled",
+            entry.title,
+        )
+        lock_monitoring = False
 
     cache = EventCache(hass, entry.entry_id, feed_token)
     await cache.async_load()
