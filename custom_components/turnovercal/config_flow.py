@@ -165,6 +165,10 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
                     ),
                 )
 
+                # Guard: force lock_monitoring off if keymaster absent
+                if lock_monitoring and not _keymaster_available(self.hass):
+                    lock_monitoring = False
+
                 self._user_data = {
                     CONF_CALENDAR_ENTITY: entity_id,
                     CONF_LOCK_MONITORING: lock_monitoring,
@@ -239,6 +243,7 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
                         min=1,
                         max=DEFAULT_CLEANING_CODE_SLOT_MAX,
                         mode=NumberSelectorMode.BOX,
+                        step=1,
                     ),
                 ),
             },
@@ -500,6 +505,7 @@ class TurnoverCalOptionsFlow(OptionsFlow):
                         min=1,
                         max=DEFAULT_CLEANING_CODE_SLOT_MAX,
                         mode=NumberSelectorMode.BOX,
+                        step=1,
                     ),
                 ),
                 vol.Required(
