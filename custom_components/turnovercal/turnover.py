@@ -68,9 +68,12 @@ def generate_trailing_uid(checkout_id: str) -> str:
 def _source_id(event: CalendarEvent, tz: ZoneInfo) -> str:
     """Derive a stable, PII-free source identifier from a CalendarEvent.
 
-    Hashes the event summary and normalized start/end times to avoid
-    storing guest PII and ensure timezone-independent stability.
+    Prefers the iCal UID exposed by the calendar integration when
+    available.  Falls back to hashing the event summary and
+    normalized start/end times when uid is not set.
     """
+    if event.uid:
+        return hashlib.sha256(event.uid.encode()).hexdigest()[:32]
     start = _as_datetime(event.start, tz)
     end = _as_datetime(event.end, tz)
     raw = f"{event.summary}|{start.isoformat()}|{end.isoformat()}"

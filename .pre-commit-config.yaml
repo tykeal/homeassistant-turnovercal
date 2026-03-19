@@ -175,8 +175,11 @@ repos:
         args: ["--show-error-codes", "--install-types", "--non-interactive"]
         additional_dependencies:
           - "homeassistant>=2026.2.0"
+          - "icalendar>=6.1.0"
           - "pytest"
+          - "pytest-homeassistant-custom-component>=0.13.0"
           - "pylocal-akuvox"
+          - "types-icalendar"
           - "types-pexpect"
           - "types-pygments"
           - "types-pytz"

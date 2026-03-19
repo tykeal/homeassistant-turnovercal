@@ -459,6 +459,124 @@ class TestComputeTurnoverEdgeCases:
                 timezone_str="America/New_York",
             )
 
+    def test_uid_stable_when_event_uid_provided(self) -> None:
+        """Source ID uses CalendarEvent.uid when available."""
+        events = [
+            _cal("A", _dt(10, 11), _dt(12, 11), uid="ical-uid-001"),
+            _cal("B", _dt(12, 15), _dt(15, 11), uid="ical-uid-002"),
+        ]
+        result1 = compute_turnover_events(
+            events=events,
+            summary_prefix="Turnover",
+            property_name="Beach House",
+            trailing_duration_hours=4,
+            timezone_str="America/New_York",
+        )
+        # Change times but keep same UIDs — UIDs should be stable
+        events_shifted = [
+            _cal("A", _dt(10, 12), _dt(12, 12), uid="ical-uid-001"),
+            _cal("B", _dt(12, 16), _dt(15, 12), uid="ical-uid-002"),
+        ]
+        result2 = compute_turnover_events(
+            events=events_shifted,
+            summary_prefix="Turnover",
+            property_name="Beach House",
+            trailing_duration_hours=4,
+            timezone_str="America/New_York",
+        )
+        regular1 = [e for e in result1 if not e.is_trailing]
+        regular2 = [e for e in result2 if not e.is_trailing]
+        assert regular1[0].uid == regular2[0].uid
+
+    def test_uid_changes_without_event_uid(self) -> None:
+        """Without CalendarEvent.uid, time changes alter turnover UID."""
+        events = [
+            _cal("A", _dt(10, 11), _dt(12, 11)),
+            _cal("B", _dt(12, 15), _dt(15, 11)),
+        ]
+        result1 = compute_turnover_events(
+            events=events,
+            summary_prefix="Turnover",
+            property_name="Beach House",
+            trailing_duration_hours=4,
+            timezone_str="America/New_York",
+        )
+        events_shifted = [
+            _cal("A", _dt(10, 12), _dt(12, 12)),
+            _cal("B", _dt(12, 16), _dt(15, 12)),
+        ]
+        result2 = compute_turnover_events(
+            events=events_shifted,
+            summary_prefix="Turnover",
+            property_name="Beach House",
+            trailing_duration_hours=4,
+            timezone_str="America/New_York",
+        )
+        regular1 = [e for e in result1 if not e.is_trailing]
+        regular2 = [e for e in result2 if not e.is_trailing]
+        assert regular1[0].uid != regular2[0].uid
+
+    def test_source_id_prefers_event_uid_over_hash(self) -> None:
+        """When uid is set, source IDs are based on it, not times."""
+        events_a = [
+            _cal("A", _dt(10, 11), _dt(12, 11), uid="stable-1"),
+            _cal("B", _dt(12, 15), _dt(15, 11), uid="stable-2"),
+        ]
+        events_b = [
+            _cal("X", _dt(1, 8), _dt(3, 8), uid="stable-1"),
+            _cal("Y", _dt(3, 12), _dt(6, 8), uid="stable-2"),
+        ]
+        r1 = compute_turnover_events(
+            events=events_a,
+            summary_prefix="Turnover",
+            property_name="P",
+            trailing_duration_hours=4,
+            timezone_str="America/New_York",
+        )
+        r2 = compute_turnover_events(
+            events=events_b,
+            summary_prefix="Turnover",
+            property_name="P",
+            trailing_duration_hours=4,
+            timezone_str="America/New_York",
+        )
+        # Same event UIDs → same turnover UIDs
+        reg1 = [e for e in r1 if not e.is_trailing]
+        reg2 = [e for e in r2 if not e.is_trailing]
+        assert reg1[0].uid == reg2[0].uid
+        # Trailing UIDs also stable
+        trail1 = [e for e in r1 if e.is_trailing]
+        trail2 = [e for e in r2 if e.is_trailing]
+        assert trail1[0].uid == trail2[0].uid
+
+    def test_empty_uid_falls_back_to_content_hash(self) -> None:
+        """Empty string uid falls back to content-based hashing."""
+        events = [
+            _cal("A", _dt(10, 11), _dt(12, 11), uid=""),
+            _cal("B", _dt(12, 15), _dt(15, 11), uid=""),
+        ]
+        result1 = compute_turnover_events(
+            events=events,
+            summary_prefix="Turnover",
+            property_name="Beach House",
+            trailing_duration_hours=4,
+            timezone_str="America/New_York",
+        )
+        events_shifted = [
+            _cal("A", _dt(10, 12), _dt(12, 12), uid=""),
+            _cal("B", _dt(12, 16), _dt(15, 12), uid=""),
+        ]
+        result2 = compute_turnover_events(
+            events=events_shifted,
+            summary_prefix="Turnover",
+            property_name="Beach House",
+            trailing_duration_hours=4,
+            timezone_str="America/New_York",
+        )
+        regular1 = [e for e in result1 if not e.is_trailing]
+        regular2 = [e for e in result2 if not e.is_trailing]
+        assert regular1[0].uid != regular2[0].uid
+
     def test_cross_timezone_normalization(self) -> None:
         """Events in a different tz are normalized to configured tz."""
         pacific = ZoneInfo("America/Los_Angeles")
@@ -496,6 +614,7 @@ def _cal(
     summary: str,
     start: datetime,
     end: datetime,
+    uid: str | None = None,
 ) -> CalendarEvent:
     """Build a CalendarEvent for testing."""
     return CalendarEvent(
@@ -503,4 +622,5 @@ def _cal(
         end=end,
         summary=summary,
         description="",
+        uid=uid,
     )

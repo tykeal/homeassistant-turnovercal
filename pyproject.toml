@@ -41,6 +41,10 @@ max-complexity = 10
 python_version = "3.13"
 strict = true
 
+[[tool.mypy.overrides]]
+module = "pytest_homeassistant_custom_component.*"
+ignore_missing_imports = true
+
 [tool.interrogate]
 ignore-init-method = false
 ignore-init-module = false

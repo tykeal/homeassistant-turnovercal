@@ -186,6 +186,26 @@ The UID is derived from the pair of source guest event identifiers
 using a one-way SHA-256 hash. Calendar clients use UID to deduplicate
 events; instability would cause duplicate entries.
 
+### Source Identifier Strategy
+
+When the upstream calendar integration populates
+`CalendarEvent.uid` (the iCal UID from the source calendar), the
+source identifier is derived from that UID. This provides true
+stability across event time changes because the iCal UID is
+assigned by the booking platform and does not change when a
+reservation is modified.
+
+When `CalendarEvent.uid` is not available (i.e. `None`), the
+source identifier falls back to a content hash of the event
+summary and normalized start/end times. In this fallback mode,
+UIDs will change if the source event times change.
+
+**Dependency**: Full UID stability requires the upstream calendar
+integration (Rental Control) to expose `CalendarEvent.uid`. See
+[homeassistant-rental-control#409](
+https://github.com/tykeal/homeassistant-rental-control/issues/409
+).
+
 ## Rate Limiting
 
 No explicit rate limiting is applied. The endpoint serves pre-computed
