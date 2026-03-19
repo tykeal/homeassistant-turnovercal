@@ -499,7 +499,7 @@ class TestOptionsFlow:
                 CONF_PROPERTY_NAME: "Beach House",
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
             },
             unique_id="calendar.rental_control_beach_house",
@@ -553,7 +553,7 @@ class TestOptionsFlow:
             user_input={
                 CONF_RETENTION_WEEKS: 12,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
             },
@@ -574,7 +574,7 @@ class TestOptionsFlow:
             user_input={
                 CONF_RETENTION_WEEKS: 0,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
             },
@@ -596,7 +596,7 @@ class TestOptionsFlow:
             user_input={
                 CONF_RETENTION_WEEKS: 53,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
             },
@@ -662,7 +662,7 @@ class TestOptionsFlow:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: 0,
                 CONF_PROPERTY_NAME: "Beach House",
             },
@@ -684,7 +684,7 @@ class TestOptionsFlow:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: 61,
                 CONF_PROPERTY_NAME: "Beach House",
             },
@@ -704,7 +704,7 @@ class TestOptionsFlow:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: "Cleaning",
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
             },
@@ -742,7 +742,7 @@ class TestOptionsFlow:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: 15,
                 CONF_PROPERTY_NAME: "Beach House",
             },
@@ -761,7 +761,7 @@ class TestOptionsFlow:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Mountain Cabin",
             },
@@ -780,7 +780,7 @@ class TestOptionsFlow:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
                 "regenerate_token": True,
@@ -805,7 +805,7 @@ class TestOptionsFlow:
                 user_input={
                     CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                     CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                    CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                    CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                     CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                     CONF_PROPERTY_NAME: "Beach House",
                     "regenerate_token": True,
@@ -844,7 +844,7 @@ class TestOptionsFlow:
                 user_input={
                     CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                     CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                    CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                    CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                     CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                     CONF_PROPERTY_NAME: "Beach House",
                     "regenerate_token": True,
@@ -892,12 +892,12 @@ class TestOptionsFlowLockSettings:
                 CONF_PROPERTY_NAME: "Beach House",
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_LOCK_MONITORING: True,
                 CONF_LOCK_ENTITY: "lock.front_door",
                 CONF_CLEANING_CODE_SLOT: 4,
-                CONF_EARLY_UNLOCK_GRACE_HOURS: (DEFAULT_EARLY_UNLOCK_GRACE_HOURS),
+                CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
             },
             unique_id="calendar.rental_control_beach_house",
         )
@@ -917,7 +917,7 @@ class TestOptionsFlowLockSettings:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
                 CONF_LOCK_MONITORING: True,
@@ -940,7 +940,7 @@ class TestOptionsFlowLockSettings:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
                 CONF_LOCK_MONITORING: True,
@@ -963,7 +963,7 @@ class TestOptionsFlowLockSettings:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
                 CONF_LOCK_MONITORING: False,
@@ -984,7 +984,7 @@ class TestOptionsFlowLockSettings:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
                 CONF_LOCK_MONITORING: True,
@@ -999,7 +999,7 @@ class TestOptionsFlowLockSettings:
             user_input={
                 CONF_LOCK_ENTITY: "lock.front_door",
                 CONF_CLEANING_CODE_SLOT: 15,
-                CONF_EARLY_UNLOCK_GRACE_HOURS: (DEFAULT_EARLY_UNLOCK_GRACE_HOURS),
+                CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
             },
         )
 
@@ -1017,7 +1017,7 @@ class TestOptionsFlowLockSettings:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
                 CONF_LOCK_MONITORING: True,
@@ -1050,7 +1050,7 @@ class TestOptionsFlowLockSettings:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
                 CONF_LOCK_MONITORING: True,
@@ -1084,7 +1084,7 @@ class TestOptionsFlowLockSettings:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
                 CONF_LOCK_MONITORING: True,
@@ -1118,7 +1118,7 @@ class TestOptionsFlowLockSettings:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
                 CONF_LOCK_MONITORING: True,
@@ -1134,7 +1134,7 @@ class TestOptionsFlowLockSettings:
                 user_input={
                     CONF_LOCK_ENTITY: "lock.front_door",
                     CONF_CLEANING_CODE_SLOT: 0,
-                    CONF_EARLY_UNLOCK_GRACE_HOURS: (DEFAULT_EARLY_UNLOCK_GRACE_HOURS),
+                    CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
                 },
             )
 
@@ -1151,7 +1151,7 @@ class TestOptionsFlowLockSettings:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
                 CONF_LOCK_MONITORING: True,
@@ -1166,7 +1166,7 @@ class TestOptionsFlowLockSettings:
             user_input={
                 CONF_LOCK_ENTITY: "lock.front_door",
                 CONF_CLEANING_CODE_SLOT: 2.5,
-                CONF_EARLY_UNLOCK_GRACE_HOURS: (DEFAULT_EARLY_UNLOCK_GRACE_HOURS),
+                CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
             },
         )
 
@@ -1190,7 +1190,7 @@ class TestOptionsFlowLockSettings:
             user_input={
                 CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                 CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_PROPERTY_NAME: "Beach House",
             },
@@ -1215,7 +1215,7 @@ class TestOptionsFlowLockSettings:
                 user_input={
                     CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
                     CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
-                    CONF_TRAILING_DURATION_HOURS: (DEFAULT_TRAILING_DURATION_HOURS),
+                    CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                     CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                     CONF_PROPERTY_NAME: "Beach House",
                     CONF_LOCK_MONITORING: True,
@@ -1231,7 +1231,7 @@ class TestOptionsFlowLockSettings:
                 user_input={
                     CONF_LOCK_ENTITY: "lock.front_door",
                     CONF_CLEANING_CODE_SLOT: 4,
-                    CONF_EARLY_UNLOCK_GRACE_HOURS: (DEFAULT_EARLY_UNLOCK_GRACE_HOURS),
+                    CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
                 },
             )
 

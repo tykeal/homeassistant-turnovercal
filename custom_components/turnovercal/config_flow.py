@@ -125,10 +125,14 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
         elif isinstance(slot, bool):
             errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
         elif isinstance(slot, int):
-            if slot < 1:
+            if slot < 1 or slot > DEFAULT_CLEANING_CODE_SLOT_MAX:
                 errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
         elif isinstance(slot, float):
-            if not slot.is_integer() or slot < 1:
+            if (
+                not slot.is_integer()
+                or slot < 1
+                or slot > DEFAULT_CLEANING_CODE_SLOT_MAX
+            ):
                 errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
         else:
             errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
@@ -639,6 +643,7 @@ class TurnoverCalOptionsFlow(OptionsFlow):
             or not isinstance(slot, (int, float))
             or (isinstance(slot, float) and not slot.is_integer())
             or int(slot) < 1
+            or int(slot) > DEFAULT_CLEANING_CODE_SLOT_MAX
         ):
             errors[CONF_CLEANING_CODE_SLOT] = "invalid_slot"
 
