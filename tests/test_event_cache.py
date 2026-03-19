@@ -211,9 +211,7 @@ class TestEventCacheCleanup:
         )
         await cache.async_add_event(evt)
 
-        removed = await cache.async_cleanup_expired(  # type: ignore[attr-defined]
-            retention_weeks=6, now=FIXED_NOW
-        )
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
 
         assert removed == 0
         assert VALID_UID in cache.get_events()
@@ -228,9 +226,7 @@ class TestEventCacheCleanup:
         )
         await cache.async_add_event(evt)
 
-        removed = await cache.async_cleanup_expired(  # type: ignore[attr-defined]
-            retention_weeks=6, now=FIXED_NOW
-        )
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
 
         assert removed == 1
         assert VALID_UID not in cache.get_events()
@@ -245,9 +241,7 @@ class TestEventCacheCleanup:
         )
         await cache.async_add_event(evt)
 
-        removed = await cache.async_cleanup_expired(  # type: ignore[attr-defined]
-            retention_weeks=6, now=FIXED_NOW
-        )
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
 
         assert removed == 0
         assert VALID_UID in cache.get_events()
@@ -257,9 +251,7 @@ class TestEventCacheCleanup:
         cache = EventCache(hass, "test_entry_id", _TEST_TOKEN)
         await cache.async_load()
 
-        await cache.async_cleanup_expired(  # type: ignore[attr-defined]
-            retention_weeks=6, now=FIXED_NOW
-        )
+        await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
 
         assert cache._data is not None  # noqa: SLF001
         assert cache._data.last_cleanup == FIXED_NOW  # noqa: SLF001
@@ -286,9 +278,7 @@ class TestEventCacheCleanup:
         )
         await cache.async_add_event(evt2)
 
-        removed = await cache.async_cleanup_expired(  # type: ignore[attr-defined]
-            retention_weeks=6, now=FIXED_NOW
-        )
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
 
         assert removed == 1
 
@@ -297,8 +287,6 @@ class TestEventCacheCleanup:
         cache = EventCache(hass, "test_entry_id", _TEST_TOKEN)
         await cache.async_load()
 
-        removed = await cache.async_cleanup_expired(  # type: ignore[attr-defined]
-            retention_weeks=6, now=FIXED_NOW
-        )
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
 
         assert removed == 0

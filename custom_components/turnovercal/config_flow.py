@@ -296,9 +296,11 @@ class TurnoverCalOptionsFlow(OptionsFlow):
 
         domain_data = self.hass.data.get(DOMAIN, {})
         entry_data = domain_data.get(self.config_entry.entry_id, {})
+        entry_data["feed_token"] = new_token
         cache = entry_data.get("cache")
         if cache is not None and cache._data is not None:  # noqa: SLF001
             cache._data.feed_token = new_token  # noqa: SLF001
+            await cache.async_save()
 
         return self.async_create_entry(data=self._pending_options)
 

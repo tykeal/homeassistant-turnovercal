@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.config_entries import SOURCE_USER
@@ -21,6 +21,7 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
     CONF_CLEANING_CODE_SLOT,
+    CONF_EARLY_UNLOCK_GRACE_HOURS,
     CONF_LOCK_MONITORING,
     CONF_PROPERTY_NAME,
     CONF_RETENTION_WEEKS,
@@ -422,7 +423,135 @@ class TestOptionsFlow:
         assert result["errors"] is not None
         assert CONF_RETENTION_WEEKS in result["errors"]
 
-    async def test_summary_prefix_changeable(self, hass: HomeAssistant) -> None:
+    async def test_trailing_duration_below_min_rejected(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Trailing duration of zero is rejected with error."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: 0,
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                CONF_PROPERTY_NAME: "Beach House",
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_TRAILING_DURATION_HOURS in result["errors"]
+
+    async def test_trailing_duration_above_max_rejected(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Trailing duration of 25 is rejected with error."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: 25,
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                CONF_PROPERTY_NAME: "Beach House",
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_TRAILING_DURATION_HOURS in result["errors"]
+
+    async def test_update_interval_below_min_rejected(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Update interval of zero is rejected with error."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
+                CONF_UPDATE_INTERVAL: 0,
+                CONF_PROPERTY_NAME: "Beach House",
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_UPDATE_INTERVAL in result["errors"]
+
+    async def test_update_interval_above_max_rejected(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Update interval of 61 is rejected with error."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
+                CONF_UPDATE_INTERVAL: 61,
+                CONF_PROPERTY_NAME: "Beach House",
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_UPDATE_INTERVAL in result["errors"]
+
+    async def test_grace_hours_below_min_rejected(self, hass: HomeAssistant) -> None:
+        """Early unlock grace hours of -1 is rejected."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                CONF_PROPERTY_NAME: "Beach House",
+                CONF_EARLY_UNLOCK_GRACE_HOURS: -1,
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_EARLY_UNLOCK_GRACE_HOURS in result["errors"]
+
+    async def test_grace_hours_above_max_rejected(self, hass: HomeAssistant) -> None:
+        """Early unlock grace hours of 13 is rejected."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+                CONF_PROPERTY_NAME: "Beach House",
+                CONF_EARLY_UNLOCK_GRACE_HOURS: 13,
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_EARLY_UNLOCK_GRACE_HOURS in result["errors"]
         """Summary prefix can be changed and persists."""
         entry = self._create_entry(hass)
 
@@ -560,6 +689,7 @@ class TestOptionsFlow:
         mock_cache = MagicMock()
         mock_cache._data = MagicMock()  # noqa: SLF001
         mock_cache._data.feed_token = _EXISTING_TOKEN  # noqa: SLF001
+        mock_cache.async_save = AsyncMock()
         hass.data[DOMAIN][entry.entry_id] = {"cache": mock_cache}
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -593,3 +723,5 @@ class TestOptionsFlow:
             mock_cache._data.feed_token  # noqa: SLF001
             == _REGEN_TOKEN
         )
+        assert hass.data[DOMAIN][entry.entry_id]["feed_token"] == _REGEN_TOKEN
+        mock_cache.async_save.assert_awaited_once()

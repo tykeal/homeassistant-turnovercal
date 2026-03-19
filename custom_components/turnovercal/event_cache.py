@@ -126,9 +126,9 @@ class EventCache:
     ) -> int:
         """Remove expired cached events.
 
-        Removes events where created_at is older than the retention
-        period AND dtend is in the past. Events with future dtend
-        are never removed regardless of age.
+        Removes events whose dtend is older than the retention
+        period. Events with future dtend or recent dtend within
+        the retention window are preserved.
 
         Args:
             retention_weeks: Retention period in weeks.
@@ -150,7 +150,7 @@ class EventCache:
 
         for uid in list(self._data.events.keys()):
             event = self._data.events[uid]
-            if event.created_at < cutoff and event.dtend < now_utc:
+            if event.dtend < cutoff:
                 del self._data.events[uid]
                 removed += 1
 
