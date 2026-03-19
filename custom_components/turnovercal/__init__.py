@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -30,6 +30,8 @@ from custom_components.turnovercal.event_cache import EventCache
 from custom_components.turnovercal.http_view import TurnoverCalView
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_component import EntityComponent
