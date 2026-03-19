@@ -7,7 +7,7 @@ DOMAIN = "turnovercal"
 
 # Configuration keys
 CONF_CALENDAR_ENTITY = "calendar_entity_id"
-CONF_LOCK_ENTITY = "lock_entity_id"
+CONF_KEYMASTER_DEVICE = "keymaster_device_id"
 CONF_CLEANING_CODE_SLOT = "cleaning_code_slot"
 CONF_RETENTION_WEEKS = "retention_weeks"
 CONF_SUMMARY_PREFIX = "summary_prefix"

@@ -13,9 +13,12 @@ from homeassistant.config_entries import (
     ConfigFlow,
     OptionsFlow,
 )
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     BooleanSelector,
+    DeviceSelector,
+    DeviceSelectorConfig,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -27,7 +30,7 @@ from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
     CONF_CLEANING_CODE_SLOT,
     CONF_EARLY_UNLOCK_GRACE_HOURS,
-    CONF_LOCK_ENTITY,
+    CONF_KEYMASTER_DEVICE,
     CONF_LOCK_MONITORING,
     CONF_PROPERTY_NAME,
     CONF_RETENTION_WEEKS,
@@ -62,6 +65,37 @@ def _keymaster_available(hass: HomeAssistant) -> bool:
 
     """
     return len(hass.config_entries.async_entries(KEYMASTER_DOMAIN)) > 0
+
+
+def _validate_keymaster_device(
+    hass: HomeAssistant,
+    device_id: str,
+) -> str | None:
+    """Validate a device is a keymaster lock with resolvable entity.
+
+    Args:
+        hass: Home Assistant instance.
+        device_id: The device ID to validate.
+
+    Returns:
+        Error key string if invalid, None if valid.
+
+    """
+    device_reg = dr.async_get(hass)
+    device = device_reg.async_get(device_id)
+    if device is None:
+        return "invalid_keymaster_device"
+
+    for ce_id in device.config_entries:
+        ce = hass.config_entries.async_get_entry(ce_id)
+        if (
+            ce
+            and ce.domain == KEYMASTER_DOMAIN
+            and isinstance(ce.data.get("lock_entity_id"), str)
+        ):
+            return None
+
+    return "invalid_keymaster_device"
 
 
 class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -115,14 +149,13 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
         """
         errors: dict[str, str] = {}
 
-        lock_entity = user_input.get(CONF_LOCK_ENTITY)
-        if not lock_entity or not lock_entity.startswith("lock."):
-            errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
+        device_id = user_input.get(CONF_KEYMASTER_DEVICE)
+        if not device_id:
+            errors[CONF_KEYMASTER_DEVICE] = "invalid_keymaster_device"
         else:
-            registry = er.async_get(self.hass)
-            entry = registry.async_get(lock_entity)
-            if entry is None or entry.platform != KEYMASTER_DOMAIN:
-                errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
+            err = _validate_keymaster_device(self.hass, device_id)
+            if err:
+                errors[CONF_KEYMASTER_DEVICE] = err
 
         slot = user_input.get(CONF_CLEANING_CODE_SLOT)
         if slot is None:
@@ -235,7 +268,9 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
             errors = self._validate_lock(user_input)
 
             if not errors:
-                self._user_data[CONF_LOCK_ENTITY] = user_input[CONF_LOCK_ENTITY]
+                self._user_data[CONF_KEYMASTER_DEVICE] = user_input[
+                    CONF_KEYMASTER_DEVICE
+                ]
                 self._user_data[CONF_CLEANING_CODE_SLOT] = int(
                     user_input[CONF_CLEANING_CODE_SLOT],
                 )
@@ -243,9 +278,8 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_LOCK_ENTITY): EntitySelector(
-                    EntitySelectorConfig(
-                        domain="lock",
+                vol.Required(CONF_KEYMASTER_DEVICE): DeviceSelector(
+                    DeviceSelectorConfig(
                         integration=KEYMASTER_DOMAIN,
                     ),
                 ),
@@ -298,7 +332,7 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
         }
 
         if lock_monitoring:
-            data[CONF_LOCK_ENTITY] = self._user_data[CONF_LOCK_ENTITY]
+            data[CONF_KEYMASTER_DEVICE] = self._user_data[CONF_KEYMASTER_DEVICE]
             data[CONF_CLEANING_CODE_SLOT] = self._user_data[CONF_CLEANING_CODE_SLOT]
 
         options: dict[str, Any] = {
@@ -466,7 +500,9 @@ class TurnoverCalOptionsFlow(OptionsFlow):
             errors = self._validate_lock_options(user_input)
 
             if not errors:
-                self._pending_options[CONF_LOCK_ENTITY] = user_input[CONF_LOCK_ENTITY]
+                self._pending_options[CONF_KEYMASTER_DEVICE] = user_input[
+                    CONF_KEYMASTER_DEVICE
+                ]
                 self._pending_options[CONF_CLEANING_CODE_SLOT] = int(
                     user_input[CONF_CLEANING_CODE_SLOT],
                 )
@@ -484,9 +520,9 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         opts = self.config_entry.options
         data = self.config_entry.data
 
-        lock_entity_default = opts.get(
-            CONF_LOCK_ENTITY,
-            data.get(CONF_LOCK_ENTITY, ""),
+        device_default = opts.get(
+            CONF_KEYMASTER_DEVICE,
+            data.get(CONF_KEYMASTER_DEVICE, ""),
         )
         slot_default = opts.get(
             CONF_CLEANING_CODE_SLOT,
@@ -500,11 +536,10 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Required(
-                    CONF_LOCK_ENTITY,
-                    default=lock_entity_default,
-                ): EntitySelector(
-                    EntitySelectorConfig(
-                        domain="lock",
+                    CONF_KEYMASTER_DEVICE,
+                    default=device_default,
+                ): DeviceSelector(
+                    DeviceSelectorConfig(
                         integration=KEYMASTER_DOMAIN,
                     ),
                 ),
@@ -636,14 +671,13 @@ class TurnoverCalOptionsFlow(OptionsFlow):
             """Check if value is int but not bool."""
             return isinstance(val, int) and not isinstance(val, bool)
 
-        lock_entity = user_input.get(CONF_LOCK_ENTITY, "")
-        if not lock_entity or not lock_entity.startswith("lock."):
-            errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
+        device_id = user_input.get(CONF_KEYMASTER_DEVICE, "")
+        if not device_id:
+            errors[CONF_KEYMASTER_DEVICE] = "invalid_keymaster_device"
         else:
-            registry = er.async_get(self.hass)
-            entry = registry.async_get(lock_entity)
-            if entry is None or entry.platform != KEYMASTER_DOMAIN:
-                errors[CONF_LOCK_ENTITY] = "invalid_lock_entity"
+            err = _validate_keymaster_device(self.hass, device_id)
+            if err:
+                errors[CONF_KEYMASTER_DEVICE] = err
 
         slot = user_input.get(CONF_CLEANING_CODE_SLOT, 0)
         if (

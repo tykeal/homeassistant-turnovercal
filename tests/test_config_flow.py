@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType, InvalidData
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -22,7 +23,7 @@ from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
     CONF_CLEANING_CODE_SLOT,
     CONF_EARLY_UNLOCK_GRACE_HOURS,
-    CONF_LOCK_ENTITY,
+    CONF_KEYMASTER_DEVICE,
     CONF_LOCK_MONITORING,
     CONF_PROPERTY_NAME,
     CONF_RETENTION_WEEKS,
@@ -114,33 +115,37 @@ def _register_keymaster(hass: HomeAssistant) -> MockConfigEntry:
     )
     entry = MockConfigEntry(
         domain="keymaster",
-        data={"lockname": "front_door"},
+        data={
+            "lockname": "front_door",
+            "lock_entity_id": "lock.front_door",
+        },
         title="Front Door Lock",
     )
     entry.add_to_hass(hass)
     return entry
 
 
-def _register_lock(
+def _register_keymaster_device(
     hass: HomeAssistant,
-    entity_id: str = "lock.front_door",
-) -> None:
-    """Register a lock entity in the registry.
+    config_entry: MockConfigEntry,
+) -> str:
+    """Register a keymaster device and return its ID.
 
     Args:
         hass: Home Assistant instance.
-        entity_id: Entity ID for the lock.
+        config_entry: The keymaster config entry.
+
+    Returns:
+        The device ID string.
 
     """
-    registry = er.async_get(hass)
-    object_id = entity_id.removeprefix("lock.")
-    registry.async_get_or_create(
-        domain="lock",
-        platform="keymaster",
-        unique_id=f"km_{object_id}",
-        suggested_object_id=object_id,
+    device_reg = dr.async_get(hass)
+    device = device_reg.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={("keymaster", config_entry.entry_id)},
+        name=config_entry.title,
     )
-    hass.states.async_set(entity_id, "locked")
+    return device.id
 
 
 def _schema_keys(
@@ -275,8 +280,8 @@ class TestConfigFlowLockMonitoring:
     async def test_lock_monitoring_sets_flag(self, hass: HomeAssistant) -> None:
         """Config entry records lock_monitoring when lock enabled."""
         _register_calendar(hass)
-        _register_keymaster(hass)
-        _register_lock(hass)
+        km_entry = _register_keymaster(hass)
+        device_id = _register_keymaster_device(hass, km_entry)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": SOURCE_USER}
@@ -300,14 +305,14 @@ class TestConfigFlowLockMonitoring:
             result = await hass.config_entries.flow.async_configure(
                 result["flow_id"],
                 user_input={
-                    CONF_LOCK_ENTITY: "lock.front_door",
+                    CONF_KEYMASTER_DEVICE: device_id,
                     CONF_CLEANING_CODE_SLOT: 4,
                 },
             )
 
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["data"][CONF_LOCK_MONITORING] is True
-        assert result["data"][CONF_LOCK_ENTITY] == "lock.front_door"
+        assert result["data"][CONF_KEYMASTER_DEVICE] == device_id
         assert result["data"][CONF_CLEANING_CODE_SLOT] == 4
 
     async def test_no_lock_monitoring_sets_false(self, hass: HomeAssistant) -> None:
@@ -332,8 +337,8 @@ class TestConfigFlowLockMonitoring:
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["data"][CONF_LOCK_MONITORING] is False
 
-    async def test_lock_step_invalid_entity_rejected(self, hass: HomeAssistant) -> None:
-        """Lock step with non-lock entity is rejected by schema."""
+    async def test_lock_step_invalid_device_rejected(self, hass: HomeAssistant) -> None:
+        """Lock step with non-existent device shows error."""
         _register_calendar(hass)
         _register_keymaster(hass)
 
@@ -352,19 +357,23 @@ class TestConfigFlowLockMonitoring:
         assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "lock"
 
-        with pytest.raises(InvalidData):
-            await hass.config_entries.flow.async_configure(
-                result["flow_id"],
-                user_input={
-                    CONF_LOCK_ENTITY: "sensor.not_a_lock",
-                    CONF_CLEANING_CODE_SLOT: 4,
-                },
-            )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_KEYMASTER_DEVICE: "nonexistent-device-id",
+                CONF_CLEANING_CODE_SLOT: 4,
+            },
+        )
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] is not None
+        assert CONF_KEYMASTER_DEVICE in result["errors"]
 
     async def test_lock_step_negative_slot_rejected(self, hass: HomeAssistant) -> None:
         """Lock step with negative code slot is rejected by schema."""
         _register_calendar(hass)
-        _register_keymaster(hass)
+        km_entry = _register_keymaster(hass)
+        device_id = _register_keymaster_device(hass, km_entry)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": SOURCE_USER}
@@ -385,7 +394,7 @@ class TestConfigFlowLockMonitoring:
             await hass.config_entries.flow.async_configure(
                 result["flow_id"],
                 user_input={
-                    CONF_LOCK_ENTITY: "lock.front_door",
+                    CONF_KEYMASTER_DEVICE: device_id,
                     CONF_CLEANING_CODE_SLOT: -1,
                 },
             )
@@ -393,7 +402,8 @@ class TestConfigFlowLockMonitoring:
     async def test_lock_step_float_slot_rejected(self, hass: HomeAssistant) -> None:
         """Lock step rejects non-integer float code slot."""
         _register_calendar(hass)
-        _register_keymaster(hass)
+        km_entry = _register_keymaster(hass)
+        device_id = _register_keymaster_device(hass, km_entry)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": SOURCE_USER}
@@ -413,7 +423,7 @@ class TestConfigFlowLockMonitoring:
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             user_input={
-                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_KEYMASTER_DEVICE: device_id,
                 CONF_CLEANING_CODE_SLOT: 1.5,
             },
         )
@@ -425,8 +435,8 @@ class TestConfigFlowLockMonitoring:
     async def test_lock_step_slot_over_max_rejected(self, hass: HomeAssistant) -> None:
         """Lock step rejects slot above maximum."""
         _register_calendar(hass)
-        _register_keymaster(hass)
-        _register_lock(hass)
+        km_entry = _register_keymaster(hass)
+        device_id = _register_keymaster_device(hass, km_entry)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": SOURCE_USER}
@@ -447,7 +457,7 @@ class TestConfigFlowLockMonitoring:
             await hass.config_entries.flow.async_configure(
                 result["flow_id"],
                 user_input={
-                    CONF_LOCK_ENTITY: "lock.front_door",
+                    CONF_KEYMASTER_DEVICE: device_id,
                     CONF_CLEANING_CODE_SLOT: 1025,
                 },
             )
@@ -915,7 +925,7 @@ class TestOptionsFlowLockSettings:
                 CONF_CALENDAR_ENTITY: ("calendar.rental_control_beach_house"),
                 "feed_token": _EXISTING_TOKEN,
                 CONF_LOCK_MONITORING: True,
-                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_KEYMASTER_DEVICE: "fake-device-id",
                 CONF_CLEANING_CODE_SLOT: 4,
             },
             options={
@@ -925,7 +935,7 @@ class TestOptionsFlowLockSettings:
                 CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
                 CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
                 CONF_LOCK_MONITORING: True,
-                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_KEYMASTER_DEVICE: "fake-device-id",
                 CONF_CLEANING_CODE_SLOT: 4,
                 CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
             },
@@ -978,7 +988,7 @@ class TestOptionsFlowLockSettings:
         )
 
         keys = _schema_keys(result)
-        assert CONF_LOCK_ENTITY in keys
+        assert CONF_KEYMASTER_DEVICE in keys
         assert CONF_CLEANING_CODE_SLOT in keys
         assert CONF_EARLY_UNLOCK_GRACE_HOURS in keys
 
@@ -1005,8 +1015,8 @@ class TestOptionsFlowLockSettings:
 
     async def test_cleaning_code_slot_changeable(self, hass: HomeAssistant) -> None:
         """Cleaning code slot can be changed in options."""
-        _register_keymaster(hass)
-        _register_lock(hass)
+        km_entry = _register_keymaster(hass)
+        device_id = _register_keymaster_device(hass, km_entry)
         entry = self._create_entry_with_lock(hass)
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -1028,7 +1038,7 @@ class TestOptionsFlowLockSettings:
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
             user_input={
-                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_KEYMASTER_DEVICE: device_id,
                 CONF_CLEANING_CODE_SLOT: 15,
                 CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
             },
@@ -1039,8 +1049,8 @@ class TestOptionsFlowLockSettings:
 
     async def test_grace_hours_changeable(self, hass: HomeAssistant) -> None:
         """Grace hours can be changed in lock step."""
-        _register_keymaster(hass)
-        _register_lock(hass)
+        km_entry = _register_keymaster(hass)
+        device_id = _register_keymaster_device(hass, km_entry)
         entry = self._create_entry_with_lock(hass)
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -1062,7 +1072,7 @@ class TestOptionsFlowLockSettings:
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
             user_input={
-                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_KEYMASTER_DEVICE: device_id,
                 CONF_CLEANING_CODE_SLOT: 4,
                 CONF_EARLY_UNLOCK_GRACE_HOURS: 4,
             },
@@ -1073,7 +1083,8 @@ class TestOptionsFlowLockSettings:
 
     async def test_grace_hours_below_min_rejected(self, hass: HomeAssistant) -> None:
         """Early unlock grace hours of -1 is rejected in lock step."""
-        _register_keymaster(hass)
+        km_entry = _register_keymaster(hass)
+        device_id = _register_keymaster_device(hass, km_entry)
         entry = self._create_entry_with_lock(hass)
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -1095,7 +1106,7 @@ class TestOptionsFlowLockSettings:
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
             user_input={
-                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_KEYMASTER_DEVICE: device_id,
                 CONF_CLEANING_CODE_SLOT: 4,
                 CONF_EARLY_UNLOCK_GRACE_HOURS: -1,
             },
@@ -1107,7 +1118,8 @@ class TestOptionsFlowLockSettings:
 
     async def test_grace_hours_above_max_rejected(self, hass: HomeAssistant) -> None:
         """Early unlock grace hours of 13 is rejected in lock step."""
-        _register_keymaster(hass)
+        km_entry = _register_keymaster(hass)
+        device_id = _register_keymaster_device(hass, km_entry)
         entry = self._create_entry_with_lock(hass)
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -1129,7 +1141,7 @@ class TestOptionsFlowLockSettings:
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
             user_input={
-                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_KEYMASTER_DEVICE: device_id,
                 CONF_CLEANING_CODE_SLOT: 4,
                 CONF_EARLY_UNLOCK_GRACE_HOURS: 13,
             },
@@ -1141,7 +1153,8 @@ class TestOptionsFlowLockSettings:
 
     async def test_lock_monitoring_requires_slot(self, hass: HomeAssistant) -> None:
         """Lock monitoring with zero code slot is rejected by schema."""
-        _register_keymaster(hass)
+        km_entry = _register_keymaster(hass)
+        device_id = _register_keymaster_device(hass, km_entry)
         entry = self._create_entry_with_lock(hass)
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -1164,7 +1177,7 @@ class TestOptionsFlowLockSettings:
             await hass.config_entries.options.async_configure(
                 result["flow_id"],
                 user_input={
-                    CONF_LOCK_ENTITY: "lock.front_door",
+                    CONF_KEYMASTER_DEVICE: device_id,
                     CONF_CLEANING_CODE_SLOT: 0,
                     CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
                 },
@@ -1174,7 +1187,8 @@ class TestOptionsFlowLockSettings:
         self, hass: HomeAssistant
     ) -> None:
         """Options lock step rejects non-integer float code slot."""
-        _register_keymaster(hass)
+        km_entry = _register_keymaster(hass)
+        device_id = _register_keymaster_device(hass, km_entry)
         entry = self._create_entry_with_lock(hass)
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -1196,7 +1210,7 @@ class TestOptionsFlowLockSettings:
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
             user_input={
-                CONF_LOCK_ENTITY: "lock.front_door",
+                CONF_KEYMASTER_DEVICE: device_id,
                 CONF_CLEANING_CODE_SLOT: 2.5,
                 CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
             },
@@ -1210,8 +1224,8 @@ class TestOptionsFlowLockSettings:
         self, hass: HomeAssistant
     ) -> None:
         """Options lock step rejects slot above maximum."""
-        _register_keymaster(hass)
-        _register_lock(hass)
+        km_entry = _register_keymaster(hass)
+        device_id = _register_keymaster_device(hass, km_entry)
         entry = self._create_entry_with_lock(hass)
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -1234,7 +1248,7 @@ class TestOptionsFlowLockSettings:
             await hass.config_entries.options.async_configure(
                 result["flow_id"],
                 user_input={
-                    CONF_LOCK_ENTITY: "lock.front_door",
+                    CONF_KEYMASTER_DEVICE: device_id,
                     CONF_CLEANING_CODE_SLOT: 1025,
                     CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
                 },
@@ -1267,8 +1281,8 @@ class TestOptionsFlowLockSettings:
 
     async def test_lock_step_then_regen(self, hass: HomeAssistant) -> None:
         """Lock step followed by regen routes correctly."""
-        _register_keymaster(hass)
-        _register_lock(hass)
+        km_entry = _register_keymaster(hass)
+        device_id = _register_keymaster_device(hass, km_entry)
         entry = self._create_entry_with_lock(hass)
 
         result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -1296,7 +1310,7 @@ class TestOptionsFlowLockSettings:
             result = await hass.config_entries.options.async_configure(
                 result["flow_id"],
                 user_input={
-                    CONF_LOCK_ENTITY: "lock.front_door",
+                    CONF_KEYMASTER_DEVICE: device_id,
                     CONF_CLEANING_CODE_SLOT: 4,
                     CONF_EARLY_UNLOCK_GRACE_HOURS: DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
                 },

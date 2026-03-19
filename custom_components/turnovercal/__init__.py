@@ -10,13 +10,14 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_track_time_interval
 
 from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
     CONF_CLEANING_CODE_SLOT,
     CONF_EARLY_UNLOCK_GRACE_HOURS,
-    CONF_LOCK_ENTITY,
+    CONF_KEYMASTER_DEVICE,
     CONF_LOCK_MONITORING,
     CONF_PROPERTY_NAME,
     CONF_RETENTION_WEEKS,
@@ -31,6 +32,7 @@ from custom_components.turnovercal.const import (
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     EVENT_KEYMASTER,
+    KEYMASTER_DOMAIN,
 )
 from custom_components.turnovercal.coordinator import TurnoverCoordinator
 from custom_components.turnovercal.event_cache import EventCache
@@ -48,6 +50,42 @@ if TYPE_CHECKING:
     from homeassistant.helpers.entity_component import EntityComponent
 
 _LOGGER = logging.getLogger(__name__)
+
+# Key used by keymaster to store the managed lock entity
+_KM_LOCK_ENTITY_KEY = "lock_entity_id"
+
+
+def _resolve_lock_entity(
+    hass: HomeAssistant,
+    device_id: str,
+) -> str | None:
+    """Resolve a keymaster device ID to its managed lock entity.
+
+    Looks up the device in the device registry, finds the
+    associated keymaster config entry, and returns the lock
+    entity ID from that entry's data.
+
+    Args:
+        hass: Home Assistant instance.
+        device_id: The keymaster device ID.
+
+    Returns:
+        The lock entity ID or None if not resolvable.
+
+    """
+    device_reg = dr.async_get(hass)
+    device = device_reg.async_get(device_id)
+    if device is None:
+        return None
+
+    for ce_id in device.config_entries:
+        ce = hass.config_entries.async_get_entry(ce_id)
+        if ce and ce.domain == KEYMASTER_DOMAIN:
+            entity_id = ce.data.get(_KM_LOCK_ENTITY_KEY)
+            if isinstance(entity_id, str):
+                return entity_id
+
+    return None
 
 
 async def async_setup_entry(
@@ -87,9 +125,9 @@ async def async_setup_entry(
         CONF_LOCK_MONITORING,
         entry.data.get(CONF_LOCK_MONITORING, DEFAULT_LOCK_MONITORING),
     )
-    lock_entity_id = options.get(
-        CONF_LOCK_ENTITY,
-        entry.data.get(CONF_LOCK_ENTITY),
+    keymaster_device_id = options.get(
+        CONF_KEYMASTER_DEVICE,
+        entry.data.get(CONF_KEYMASTER_DEVICE),
     )
     cleaning_code_slot = options.get(
         CONF_CLEANING_CODE_SLOT,
@@ -99,6 +137,11 @@ async def async_setup_entry(
         CONF_EARLY_UNLOCK_GRACE_HOURS,
         DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
     )
+
+    # Resolve keymaster device → lock entity
+    lock_entity_id: str | None = None
+    if lock_monitoring and keymaster_device_id:
+        lock_entity_id = _resolve_lock_entity(hass, keymaster_device_id)
 
     cache = EventCache(hass, entry.entry_id, feed_token)
     await cache.async_load()
