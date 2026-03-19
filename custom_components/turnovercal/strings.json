@@ -82,6 +82,12 @@
     },
     "entity_not_found": {
       "message": "No TurnoverCal entry found for the specified entity."
+    },
+    "invalid_timestamp": {
+      "message": "Invalid timestamp format. Provide an ISO 8601 datetime."
+    },
+    "invalid_timezone": {
+      "message": "Invalid Home Assistant timezone configuration."
     }
   }
 }

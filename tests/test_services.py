@@ -22,6 +22,7 @@ from custom_components.turnovercal.services import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_TIMESTAMP,
     _handle_mark_cleaning,
+    _parse_timestamp,
     _resolve_coordinators,
 )
 
@@ -267,9 +268,9 @@ class TestHandleMarkCleaning:
         coord = _make_coordinator()
         hass.data[DOMAIN] = {_ENTRY_ID: {"coordinator": coord}}
         hass.config.time_zone = "America/New_York"
-        # 10:30 PST = 18:30 UTC
-        pst = ZoneInfo("America/Los_Angeles")
-        ts = datetime(2026, 3, 15, 10, 30, 0, tzinfo=pst)
+        # 10:30 PDT (March = daylight saving) = 17:30 UTC
+        pdt = ZoneInfo("America/Los_Angeles")
+        ts = datetime(2026, 3, 15, 10, 30, 0, tzinfo=pdt)
         call = _make_service_call(
             hass,
             data={
@@ -337,6 +338,24 @@ class TestHandleMarkCleaning:
         # Only first call triggers data update
         coord.async_set_updated_data.assert_called_once()
 
+    async def test_invalid_timestamp_raises(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Invalid timestamp string raises ServiceValidationError."""
+        with pytest.raises(ServiceValidationError):
+            _parse_timestamp(hass, "not-a-date")
+
+    async def test_invalid_timezone_raises(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Invalid HA timezone raises ServiceValidationError."""
+        hass.config.time_zone = "Invalid/Not_A_Zone"
+        naive_ts = datetime(2026, 3, 15, 10, 0, 0)  # noqa: DTZ001
+        with pytest.raises(ServiceValidationError):
+            _parse_timestamp(hass, naive_ts)
+
 
 # -------------------------------------------------------------------
 # T042: Contract tests
@@ -346,8 +365,11 @@ class TestHandleMarkCleaning:
 class TestServiceContract:
     """Verify service matches contract specification."""
 
-    _svc_path = Path(
-        "custom_components/turnovercal/services.yaml",
+    _svc_path = (
+        Path(__file__).resolve().parent.parent
+        / "custom_components"
+        / "turnovercal"
+        / "services.yaml"
     )
 
     def _load_yaml(self) -> dict[str, Any]:

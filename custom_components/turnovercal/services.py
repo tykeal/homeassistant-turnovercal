@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
@@ -147,13 +147,29 @@ def _parse_timestamp(
     if ts_raw is None:
         return datetime.now(tz=ZoneInfo("UTC"))
 
-    tz_str = hass.config.time_zone or "UTC"
-    tz = ZoneInfo(tz_str)
+    try:
+        tz_str = hass.config.time_zone or "UTC"
+        tz = ZoneInfo(tz_str)
+    except (ZoneInfoNotFoundError, KeyError) as err:
+        msg = f"Invalid HA timezone: {hass.config.time_zone}"
+        raise ServiceValidationError(
+            msg,
+            translation_domain=DOMAIN,
+            translation_key="invalid_timezone",
+        ) from err
 
-    if isinstance(ts_raw, datetime):
-        parsed = ts_raw
-    else:
-        parsed = datetime.fromisoformat(str(ts_raw))
+    try:
+        if isinstance(ts_raw, datetime):
+            parsed = ts_raw
+        else:
+            parsed = datetime.fromisoformat(str(ts_raw))
+    except (ValueError, TypeError) as err:
+        msg = f"Invalid timestamp: {ts_raw}"
+        raise ServiceValidationError(
+            msg,
+            translation_domain=DOMAIN,
+            translation_key="invalid_timestamp",
+        ) from err
 
     if parsed.tzinfo is not None:
         return parsed.astimezone(ZoneInfo("UTC"))
