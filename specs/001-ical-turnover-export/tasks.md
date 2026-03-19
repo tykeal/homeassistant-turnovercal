@@ -230,8 +230,8 @@ Acceptance scenarios 4-1 through 4-4 pass.
 - [X] T047 [P] Run `uv run mypy custom_components/turnovercal/` and fix all type errors (full type annotations required)
 - [X] T048 [P] Run `uv run interrogate -vv --fail-under=100 custom_components/turnovercal/` and add missing docstrings
 - [X] T049 [P] Run full test suite with coverage: `uv run pytest tests/ --cov=custom_components/turnovercal --cov-report=term-missing` and verify all tests pass
-- [X] T050 Validate iCal output against RFC 5545 by subscribing to feed in Google Calendar, Apple Calendar, and Outlook per SC-003
-- [X] T051 Performance check: verify iCal feed responds within 2 seconds with 52 weeks of cached events per SC-008
+- [X] T050 Validate iCal output against RFC 5545 by subscribing to feed in Google Calendar, Apple Calendar, and Outlook per SC-003 — **partial**: round-trip parse tests added; client subscription requires running HA
+- [X] T051 Performance check: verify iCal feed responds within 2 seconds with 52 weeks of cached events per SC-008 — **partial**: iCal generation benchmarks pass; end-to-end HTTP latency requires running HA
 - [X] T052 Security review: verify token is redacted from logs/diagnostics, `hmac.compare_digest()` used for all token comparisons, no PII in summaries per FR-014
 - [X] T053 Run `uv run pre-commit run --all-files` to validate all hooks pass
 - [X] T054 Validate quickstart.md against actual repository state — confirm all commands work
