@@ -290,17 +290,27 @@ class TurnoverCalOptionsFlow(OptionsFlow):
             )
 
         new_token = generate_token()
-        self.hass.config_entries.async_update_entry(
-            self.config_entry,
-            data={**self.config_entry.data, "feed_token": new_token},
-        )
 
         domain_data = self.hass.data.setdefault(DOMAIN, {})
-        entry_data = domain_data.setdefault(self.config_entry.entry_id, {})
+        entry_data = domain_data.setdefault(
+            self.config_entry.entry_id,
+            {},
+        )
         entry_data["feed_token"] = new_token
         cache = entry_data.get("cache")
         if cache is not None:
             await cache.async_set_feed_token(new_token)
+
+        # Batch data + options into a single update to avoid
+        # triggering the update listener twice.
+        self.hass.config_entries.async_update_entry(
+            self.config_entry,
+            data={
+                **self.config_entry.data,
+                "feed_token": new_token,
+            },
+            options=self._pending_options,
+        )
 
         return self.async_create_entry(data=self._pending_options)
 
