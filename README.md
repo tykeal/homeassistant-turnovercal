@@ -43,7 +43,7 @@ windows alongside your personal schedule.
 | -------------------------------- | ------------------------ |
 | Home Assistant                   | ≥ 2026.2.0               |
 | [Rental Control][rental-control] | Installed and configured |
-| Python                           | ≥ 3.13                   |
+| Python                           | ≥ 3.13.2                 |
 
 [Keymaster][keymaster] is optional — only required for automatic early
 completion via lock monitoring.

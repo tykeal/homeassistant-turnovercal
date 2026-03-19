@@ -15,6 +15,16 @@ dependencies = [
     "icalendar>=6.1.0",
 ]
 
+[project.optional-dependencies]
+test = [
+    "freezegun>=1.5",
+    "pytest>=8.0",
+    "pytest-homeassistant-custom-component>=0.13",
+    "pytest-aiohttp>=1.0",
+    "pytest-cov>=6.0",
+    "pytest-asyncio>=0.24",
+]
+
 [dependency-groups]
 dev = [
     "freezegun>=1.5",
