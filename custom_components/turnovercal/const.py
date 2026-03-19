@@ -28,6 +28,9 @@ DEFAULT_LOCK_MONITORING = False
 # Integration domains
 KEYMASTER_DOMAIN = "keymaster"
 
+# Keymaster config entry data keys
+KM_LOCK_ENTITY_KEY = "lock_entity_id"
+
 # Selector limits
 DEFAULT_CLEANING_CODE_SLOT_MAX = 1024
 

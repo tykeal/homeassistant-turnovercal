@@ -33,6 +33,7 @@ from custom_components.turnovercal.const import (
     DOMAIN,
     EVENT_KEYMASTER,
     KEYMASTER_DOMAIN,
+    KM_LOCK_ENTITY_KEY,
 )
 from custom_components.turnovercal.coordinator import TurnoverCoordinator
 from custom_components.turnovercal.event_cache import EventCache
@@ -50,9 +51,6 @@ if TYPE_CHECKING:
     from homeassistant.helpers.entity_component import EntityComponent
 
 _LOGGER = logging.getLogger(__name__)
-
-# Key used by keymaster to store the managed lock entity
-_KM_LOCK_ENTITY_KEY = "lock_entity_id"
 
 
 def _resolve_lock_entity(
@@ -81,7 +79,7 @@ def _resolve_lock_entity(
     for ce_id in device.config_entries:
         ce = hass.config_entries.async_get_entry(ce_id)
         if ce and ce.domain == KEYMASTER_DOMAIN:
-            entity_id = ce.data.get(_KM_LOCK_ENTITY_KEY)
+            entity_id = ce.data.get(KM_LOCK_ENTITY_KEY)
             if isinstance(entity_id, str) and entity_id.startswith(
                 "lock.",
             ):

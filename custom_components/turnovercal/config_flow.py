@@ -46,6 +46,7 @@ from custom_components.turnovercal.const import (
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     KEYMASTER_DOMAIN,
+    KM_LOCK_ENTITY_KEY,
 )
 from custom_components.turnovercal.token import generate_token
 
@@ -88,7 +89,7 @@ def _validate_keymaster_device(
 
     for ce_id in device.config_entries:
         ce = hass.config_entries.async_get_entry(ce_id)
-        lock_id = ce.data.get("lock_entity_id") if ce else None
+        lock_id = ce.data.get(KM_LOCK_ENTITY_KEY) if ce else None
         if (
             ce
             and ce.domain == KEYMASTER_DOMAIN
@@ -254,7 +255,7 @@ class TurnoverCalConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle the lock configuration step.
 
-        Presents a form for selecting the lock entity and
+        Presents a form for selecting the Keymaster device and
         cleaning code slot number when lock monitoring is enabled.
 
         Args:
@@ -485,7 +486,7 @@ class TurnoverCalOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Handle lock configuration options step.
 
-        Presents a form for lock entity, cleaning code slot,
+        Presents a form for Keymaster device, cleaning code slot,
         and early unlock grace hours. Routes to token
         regeneration if requested, otherwise saves options.
 
