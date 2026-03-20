@@ -9,6 +9,7 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
+from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_track_time_interval
@@ -52,6 +53,8 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+PLATFORMS: list[Platform] = [Platform.SENSOR]
+
 
 def _resolve_lock_entity(
     hass: HomeAssistant,
@@ -88,6 +91,64 @@ def _resolve_lock_entity(
     return None
 
 
+def _resolve_lock_monitoring(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> tuple[bool, str | None, int, int]:
+    """Resolve lock monitoring settings from entry config.
+
+    Reads lock monitoring options, resolves the keymaster device
+    to a lock entity, and disables monitoring if unresolvable.
+
+    Args:
+        hass: Home Assistant instance.
+        entry: The config entry to read settings from.
+
+    Returns:
+        Tuple of (enabled, lock_entity_id, slot, grace_hours).
+
+    """
+    options = entry.options
+    enabled = options.get(
+        CONF_LOCK_MONITORING,
+        entry.data.get(CONF_LOCK_MONITORING, DEFAULT_LOCK_MONITORING),
+    )
+    device_id = options.get(
+        CONF_KEYMASTER_DEVICE,
+        entry.data.get(CONF_KEYMASTER_DEVICE),
+    )
+    slot = options.get(
+        CONF_CLEANING_CODE_SLOT,
+        entry.data.get(CONF_CLEANING_CODE_SLOT, 0),
+    )
+    grace = options.get(
+        CONF_EARLY_UNLOCK_GRACE_HOURS,
+        DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
+    )
+
+    lock_entity_id: str | None = None
+    if enabled and device_id:
+        lock_entity_id = _resolve_lock_entity(hass, device_id)
+        if lock_entity_id is None:
+            _LOGGER.warning(
+                "Lock monitoring enabled for '%s' but Keymaster "
+                "device '%s' could not be resolved to a lock "
+                "entity. Lock monitoring will be disabled",
+                entry.title,
+                device_id,
+            )
+            enabled = False
+    elif enabled:
+        _LOGGER.warning(
+            "Lock monitoring enabled for '%s' but no Keymaster "
+            "device configured. Lock monitoring will be disabled",
+            entry.title,
+        )
+        enabled = False
+
+    return enabled, lock_entity_id, slot, grace
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -120,44 +181,9 @@ async def async_setup_entry(
     )
     update_minutes = options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
 
-    # Lock monitoring settings (from options, fallback to data)
-    lock_monitoring = options.get(
-        CONF_LOCK_MONITORING,
-        entry.data.get(CONF_LOCK_MONITORING, DEFAULT_LOCK_MONITORING),
+    lock_monitoring, lock_entity_id, cleaning_code_slot, grace_hours = (
+        _resolve_lock_monitoring(hass, entry)
     )
-    keymaster_device_id = options.get(
-        CONF_KEYMASTER_DEVICE,
-        entry.data.get(CONF_KEYMASTER_DEVICE),
-    )
-    cleaning_code_slot = options.get(
-        CONF_CLEANING_CODE_SLOT,
-        entry.data.get(CONF_CLEANING_CODE_SLOT, 0),
-    )
-    grace_hours = options.get(
-        CONF_EARLY_UNLOCK_GRACE_HOURS,
-        DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
-    )
-
-    # Resolve keymaster device → lock entity
-    lock_entity_id: str | None = None
-    if lock_monitoring and keymaster_device_id:
-        lock_entity_id = _resolve_lock_entity(hass, keymaster_device_id)
-        if lock_entity_id is None:
-            _LOGGER.warning(
-                "Lock monitoring enabled for '%s' but Keymaster "
-                "device '%s' could not be resolved to a lock "
-                "entity. Lock monitoring will be disabled",
-                entry.title,
-                keymaster_device_id,
-            )
-            lock_monitoring = False
-    elif lock_monitoring:
-        _LOGGER.warning(
-            "Lock monitoring enabled for '%s' but no Keymaster "
-            "device configured. Lock monitoring will be disabled",
-            entry.title,
-        )
-        lock_monitoring = False
 
     cache = EventCache(hass, entry.entry_id, feed_token)
     await cache.async_load()
@@ -203,6 +229,9 @@ async def async_setup_entry(
 
     # Register services (idempotent)
     await async_setup_services(hass)
+
+    # Forward platform setup (sensor for feed URL)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Register Keymaster listener if lock monitoring is enabled
     if lock_monitoring and lock_entity_id:
@@ -256,7 +285,8 @@ async def async_unload_entry(
 ) -> bool:
     """Unload a TurnoverCal config entry.
 
-    Removes the coordinator and cache from hass.data.
+    Removes the coordinator, cache, and platform entities
+    from hass.data.
 
     Args:
         hass: Home Assistant instance.
@@ -266,9 +296,11 @@ async def async_unload_entry(
         True if unload was successful.
 
     """
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
     domain_data = hass.data.get(DOMAIN)
     if domain_data is None:
-        return True
+        return unload_ok
     coordinator = domain_data.get(entry.entry_id, {}).get(
         "coordinator",
     )
@@ -280,4 +312,4 @@ async def async_unload_entry(
     if not domain_data:
         await async_unload_services(hass)
 
-    return True
+    return unload_ok
