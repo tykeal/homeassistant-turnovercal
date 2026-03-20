@@ -76,9 +76,13 @@ class TestFeedUrlSensor:
         with patch(
             "custom_components.turnovercal.sensor.get_url",
             return_value="http://homeassistant.local:8123",
-        ):
+        ) as mock_get_url:
             value = sensor.native_value
 
+        mock_get_url.assert_called_once_with(
+            hass,
+            prefer_external=True,
+        )
         expected = (
             "http://homeassistant.local:8123"
             "/api/turnovercal/test-token-abc123/calendar.ics"
