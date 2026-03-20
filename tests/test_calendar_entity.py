@@ -79,15 +79,8 @@ def _make_entity(
         entry = _StubEntry()
     if coord is None:
         coord = _StubCoordinator()
-    with (
-        patch.object(
-            TurnoverCalCalendarEntity,
-            "__init_subclass__",
-            lambda **_kw: None,
-        ),
-        patch(
-            "custom_components.turnovercal.calendar.CoordinatorEntity.__init__",
-        ),
+    with patch(
+        "custom_components.turnovercal.calendar.CoordinatorEntity.__init__",
     ):
         entity = TurnoverCalCalendarEntity(
             entry,  # type: ignore[arg-type]

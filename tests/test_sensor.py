@@ -176,7 +176,7 @@ class TestFeedUrlSensor:
             "custom_components.turnovercal.sensor.get_url",
             return_value="http://ha.local:8123",
         ):
-            value1 = sensor.native_value
+            value_before = sensor.native_value
 
         # Simulate token regeneration
         fake_entry_data["feed_token"] = "new-token-xyz789"  # noqa: S105
@@ -185,7 +185,9 @@ class TestFeedUrlSensor:
             "custom_components.turnovercal.sensor.get_url",
             return_value="http://ha.local:8123",
         ):
-            value2 = sensor.native_value
+            value_after = sensor.native_value
 
-        assert value1 != value2
-        assert "new-token-xyz789" in value2  # type: ignore[operator]
+        assert isinstance(value_before, str)
+        assert isinstance(value_after, str)
+        assert value_before != value_after
+        assert "new-token-xyz789" in value_after
