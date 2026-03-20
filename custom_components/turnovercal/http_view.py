@@ -13,7 +13,7 @@ from homeassistant.components.http import (  # type: ignore[attr-defined]
 )
 
 from custom_components.turnovercal.calendar import generate_ical
-from custom_components.turnovercal.const import DOMAIN
+from custom_components.turnovercal.const import DOMAIN, FEED_URL_PATH
 from custom_components.turnovercal.token import validate_token
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 class TurnoverCalView(HomeAssistantView):
     """Serve the iCal feed at a secret URL."""
 
-    url = "/api/turnovercal/{token}/calendar.ics"
+    url = FEED_URL_PATH
     name = "api:turnovercal:calendar"
     requires_auth = False
 

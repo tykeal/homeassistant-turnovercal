@@ -11,9 +11,8 @@ from unittest.mock import patch
 import pytest
 from homeassistant.const import EntityCategory
 
-from custom_components.turnovercal.const import DOMAIN
+from custom_components.turnovercal.const import DOMAIN, FEED_URL_PATH
 from custom_components.turnovercal.sensor import (
-    _FEED_PATH_TEMPLATE,
     TurnoverCalFeedUrlSensor,
 )
 
@@ -126,7 +125,7 @@ class TestFeedUrlSensor:
         ):
             value = sensor.native_value
 
-        expected_path = _FEED_PATH_TEMPLATE.format(
+        expected_path = FEED_URL_PATH.format(
             token="test-token-abc123",  # noqa: S106
         )
         assert value == expected_path

@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
 from homeassistant.const import EntityCategory
 from homeassistant.helpers.network import get_url
 
-from custom_components.turnovercal.const import DOMAIN
+from custom_components.turnovercal.const import DOMAIN, FEED_URL_PATH
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -21,8 +21,6 @@ if TYPE_CHECKING:
     from homeassistant.helpers.entity_platform import (
         AddEntitiesCallback,
     )
-
-_FEED_PATH_TEMPLATE = "/api/turnovercal/{token}/calendar.ics"
 
 
 async def async_setup_entry(
@@ -47,6 +45,7 @@ class TurnoverCalFeedUrlSensor(SensorEntity):
     """Sensor that exposes the iCal feed URL."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
     _attr_icon = "mdi:calendar-export"
     _attr_has_entity_name = True
     _attr_translation_key = "feed_url"
@@ -82,7 +81,7 @@ class TurnoverCalFeedUrlSensor(SensorEntity):
         if not token:
             return None
 
-        path = _FEED_PATH_TEMPLATE.format(token=token)
+        path = FEED_URL_PATH.format(token=token)
 
         try:
             base_url = get_url(self.hass)

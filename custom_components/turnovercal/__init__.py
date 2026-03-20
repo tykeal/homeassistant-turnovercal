@@ -297,10 +297,12 @@ async def async_unload_entry(
 
     """
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unload_ok:
+        return False
 
     domain_data = hass.data.get(DOMAIN)
     if domain_data is None:
-        return unload_ok
+        return True
     coordinator = domain_data.get(entry.entry_id, {}).get(
         "coordinator",
     )
@@ -312,4 +314,4 @@ async def async_unload_entry(
     if not domain_data:
         await async_unload_services(hass)
 
-    return unload_ok
+    return True
