@@ -87,7 +87,7 @@ class TurnoverCalFeedUrlSensor(SensorEntity):
         path = FEED_URL_PATH.format(token=token)
 
         try:
-            base_url = get_url(self.hass)
+            base_url = get_url(self.hass, prefer_external=True)
         except Exception:  # noqa: BLE001
             return path
 
