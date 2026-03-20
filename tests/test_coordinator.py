@@ -1029,3 +1029,29 @@ class TestCoordinatorPreservesAdjustments:
             await coordinator._async_update_data()  # noqa: SLF001
 
         cache.async_add_event.assert_called_once()
+
+    async def test_adjusted_event_preserved_when_source_removed(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Lock-adjusted event survives source booking removal."""
+        adjusted = _make_event(10, 11, 12, 15)
+        adjusted.adjusted_by_lock = True
+        adjusted.original_dtend = adjusted.dtend
+        adjusted.dtend = datetime(2026, 3, 11, 0, 0, tzinfo=ET)
+        adjusted.status = "adjusted"
+
+        cache = _make_cache_mock({adjusted.uid: adjusted})
+
+        coordinator = _make_coordinator(hass, cache)
+
+        # Source booking removed: compute returns empty list
+        with (
+            freeze_time("2026-03-10T18:30:00+00:00"),
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                return_value=[],
+            ),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        cache.async_remove_event.assert_not_called()
