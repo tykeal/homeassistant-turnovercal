@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import icalendar
 
-from custom_components.turnovercal.calendar import generate_ical
+from custom_components.turnovercal.ical import generate_ical
 from custom_components.turnovercal.models import TurnoverEvent
 
 UTC = ZoneInfo("UTC")

@@ -88,6 +88,18 @@
       "slot_out_of_range": "Cleaning code slot must be between 1 and 1024."
     }
   },
+  "entity": {
+    "calendar": {
+      "turnover_calendar": {
+        "name": "Turnover calendar"
+      }
+    },
+    "sensor": {
+      "feed_url": {
+        "name": "Feed URL"
+      }
+    }
+  },
   "exceptions": {
     "ambiguous_target": {
       "message": "Provide either an entity target or config_entry_id, not both."
