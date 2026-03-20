@@ -5,8 +5,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from homeassistant.components.calendar import (
     CalendarEntity,
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
     )
 
     from custom_components.turnovercal.models import TurnoverEvent
+
+_UTC = ZoneInfo("UTC")
 
 
 def _to_calendar_event(evt: TurnoverEvent) -> CalendarEvent:
@@ -108,7 +111,7 @@ class TurnoverCalCalendarEntity(
             The current or next CalendarEvent, or None.
 
         """
-        now = datetime.now(tz=UTC)
+        now = datetime.now(tz=_UTC)
         events = self.coordinator.cache_events
         if not events:
             return None
