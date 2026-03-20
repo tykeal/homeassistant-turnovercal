@@ -12,8 +12,8 @@ from homeassistant.components.http import (  # type: ignore[attr-defined]
     HomeAssistantView,
 )
 
-from custom_components.turnovercal.calendar import generate_ical
 from custom_components.turnovercal.const import DOMAIN, FEED_URL_PATH
+from custom_components.turnovercal.ical import generate_ical
 from custom_components.turnovercal.token import validate_token
 
 if TYPE_CHECKING:

@@ -62,6 +62,9 @@ class TurnoverCalFeedUrlSensor(SensorEntity):
         """
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_feed_url"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+        }
 
     @property
     def native_value(self) -> str | None:

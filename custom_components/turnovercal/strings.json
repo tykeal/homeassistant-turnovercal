@@ -89,6 +89,11 @@
     }
   },
   "entity": {
+    "calendar": {
+      "turnover_calendar": {
+        "name": "Turnover calendar"
+      }
+    },
     "sensor": {
       "feed_url": {
         "name": "Feed URL"

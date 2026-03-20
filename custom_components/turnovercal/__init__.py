@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.CALENDAR, Platform.SENSOR]
 
 
 def _resolve_lock_entity(
@@ -221,6 +221,16 @@ async def async_setup_entry(
         "property_name": property_name,
     }
 
+    # Register device for this config entry
+    device_reg = dr.async_get(hass)
+    device_reg.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=f"TurnoverCal {property_name}",
+        manufacturer="TurnoverCal",
+        entry_type=dr.DeviceEntryType.SERVICE,
+    )
+
     # Register HTTP view (idempotent)
     hass.http.register_view(TurnoverCalView())
 
@@ -230,8 +240,11 @@ async def async_setup_entry(
     # Register services (idempotent)
     await async_setup_services(hass)
 
-    # Forward platform setup (sensor for feed URL)
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # Forward platform setup (calendar + sensor entities)
+    await hass.config_entries.async_forward_entry_setups(
+        entry,
+        PLATFORMS,
+    )
 
     # Register Keymaster listener if lock monitoring is enabled
     if lock_monitoring and lock_entity_id:
