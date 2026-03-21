@@ -3,7 +3,7 @@
 
 """Cleanliness state tracking for the TurnoverCal integration.
 
-Provides the CleanlinessState dataclass for per-property state and the
+Provides the CleanlinessState model for per-property state and the
 CleanlinessStateMachine that manages phase lifecycle transitions.
 """
 
@@ -43,6 +43,22 @@ VALID_PHASES: frozenset[str] = frozenset(
         PHASE_BEING_CLEANED,
     }
 )
+
+
+def _validate_tz_aware(dt: datetime, field_name: str) -> None:
+    """Raise ValueError if *dt* is a naive (tzinfo-less) datetime.
+
+    Args:
+        dt: The datetime value to check.
+        field_name: Name of the field, used in the error message.
+
+    Raises:
+        ValueError: If *dt* has no tzinfo.
+
+    """
+    if dt.tzinfo is None:
+        msg = f"'{field_name}' must be a timezone-aware datetime, got naive"
+        raise ValueError(msg)
 
 
 class CleanlinessState:
@@ -87,12 +103,24 @@ class CleanlinessState:
             config_entry_id: Config entry this state belongs to.
 
         Raises:
-            ValueError: If *phase* is not one of the four valid phases.
+            ValueError: If *phase* is not one of the four valid phases
+                or any datetime argument is naive (missing tzinfo).
 
         """
         if phase not in VALID_PHASES:
             msg = f"Invalid phase '{phase}', must be one of {sorted(VALID_PHASES)}"
             raise ValueError(msg)
+
+        _validate_tz_aware(last_transition_at, "last_transition_at")
+        if timer_target is not None:
+            _validate_tz_aware(timer_target, "timer_target")
+        if dirty_since is not None:
+            _validate_tz_aware(dirty_since, "dirty_since")
+        if associated_checkout_time is not None:
+            _validate_tz_aware(
+                associated_checkout_time,
+                "associated_checkout_time",
+            )
 
         self.is_dirty = is_dirty
         self.phase = phase

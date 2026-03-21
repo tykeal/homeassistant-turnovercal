@@ -207,6 +207,53 @@ class TestCleanlinessStateValidation:
                 config_entry_id=_TEST_ENTRY_ID,
             )
 
+    def test_naive_last_transition_at_raises_value_error(self) -> None:
+        """Naive datetime for last_transition_at raises ValueError."""
+        with pytest.raises(ValueError, match="timezone-aware"):
+            CleanlinessState(
+                is_dirty=False,
+                phase=PHASE_CLEAN,
+                last_transition_at=datetime(2026, 3, 15, 14, 0),  # noqa: DTZ001
+                last_transition_reason=REASON_STARTUP_RECONCILIATION,
+                config_entry_id=_TEST_ENTRY_ID,
+            )
+
+    def test_naive_timer_target_raises_value_error(self) -> None:
+        """Naive datetime for timer_target raises ValueError."""
+        with pytest.raises(ValueError, match="timezone-aware"):
+            CleanlinessState(
+                is_dirty=True,
+                phase=PHASE_BEING_CLEANED,
+                last_transition_at=datetime(2026, 3, 15, 14, 0, tzinfo=UTC),
+                last_transition_reason=REASON_GUEST_CHECKIN,
+                timer_target=datetime(2026, 3, 15, 17, 0),  # noqa: DTZ001
+                config_entry_id=_TEST_ENTRY_ID,
+            )
+
+    def test_naive_dirty_since_raises_value_error(self) -> None:
+        """Naive datetime for dirty_since raises ValueError."""
+        with pytest.raises(ValueError, match="timezone-aware"):
+            CleanlinessState(
+                is_dirty=True,
+                phase=PHASE_OCCUPIED,
+                last_transition_at=datetime(2026, 3, 15, 14, 0, tzinfo=UTC),
+                last_transition_reason=REASON_GUEST_CHECKIN,
+                dirty_since=datetime(2026, 3, 14, 10, 0),  # noqa: DTZ001
+                config_entry_id=_TEST_ENTRY_ID,
+            )
+
+    def test_naive_associated_checkout_time_raises_value_error(self) -> None:
+        """Naive datetime for associated_checkout_time raises ValueError."""
+        with pytest.raises(ValueError, match="timezone-aware"):
+            CleanlinessState(
+                is_dirty=True,
+                phase=PHASE_AWAITING_CLEANING,
+                last_transition_at=datetime(2026, 3, 15, 14, 0, tzinfo=UTC),
+                last_transition_reason=REASON_GUEST_CHECKIN,
+                associated_checkout_time=datetime(2026, 3, 15, 11, 0),  # noqa: DTZ001
+                config_entry_id=_TEST_ENTRY_ID,
+            )
+
 
 # ---------------------------------------------------------------------------
 # CleanlinessState - Default Factory
