@@ -5,8 +5,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # Specification Quality Checklist: Property Cleanliness State Tracking
 
-**Purpose**: Validate specification completeness and quality before proceeding
-to planning
+**Purpose**: Validate specification completeness
+and quality before proceeding to planning.
 **Created**: 2025-07-18
 **Feature**: [spec.md](../spec.md)
 

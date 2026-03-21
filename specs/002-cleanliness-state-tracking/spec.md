@@ -14,14 +14,16 @@ should be scheduled. The state is persisted so it survives restarts."
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 — Automatic Dirty Detection on Guest Check-In (Priority: P1)
+### User Story 1 - Automatic Dirty Detection on Guest Check-In (Priority: P1)
 
 As a property manager, I want the system to automatically recognize that my
 property will need cleaning as soon as a guest arrives, so that the system
 validates that a cleaning event exists (or creates a fallback) on the turnover
 calendar without any manual intervention.
 
-When a guest checks in (RC signals a check-in event), the property transitions
+When a guest checks in (RC — the Rental Control
+reservation calendar system — signals a check-in
+event), the property transitions
 to "dirty." The system validates that a turnover cleaning event already exists
 for the corresponding check-out period. If no such event exists (safety-net
 case), the system generates a fallback cleaning event starting at the scheduled
@@ -59,7 +61,7 @@ a cleaning event appears on the calendar.
 
 ---
 
-### User Story 2 — Clean Confirmation via Lock Code or Service (Priority: P1)
+### User Story 2 - Clean Confirmation via Lock Code or Service (Priority: P1)
 
 As a property manager, I want the property to begin the cleaning lifecycle when
 my cleaner uses their designated lock code (transitioning to `being_cleaned`)
@@ -99,7 +101,7 @@ accordingly.
 
 ---
 
-### User Story 3 — Binary Sensor Visibility on Dashboard (Priority: P1)
+### User Story 3 - Binary Sensor Visibility on Dashboard (Priority: P1)
 
 As a property manager with multiple vacation rentals, I want each property to
 have a binary sensor showing dirty or clean status, so that I can build a
@@ -133,7 +135,7 @@ correct on/off states matching the property's cleanliness.
 
 ---
 
-### User Story 4 — Mid-Stay Cancellation Triggers Dirty State (Priority: P2)
+### User Story 4 - Mid-Stay Cancellation Triggers Dirty State (Priority: P2)
 
 As a property manager, I want the system to recognize that a property needs
 cleaning when a booking is cancelled while the guest is mid-stay, so that even
@@ -165,7 +167,7 @@ persist even after the source booking is gone.
 
 ---
 
-### User Story 5 — Force Dirty via Service Action (Priority: P2)
+### User Story 5 - Force Dirty via Service Action (Priority: P2)
 
 As a property manager, I want to force a property into the "dirty" state at any
 time via a service action, so that I can trigger a cleaning event when I
@@ -193,7 +195,7 @@ cleaning event appears.
 
 ---
 
-### User Story 6 — State Persistence Across Restarts (Priority: P2)
+### User Story 6 - State Persistence Across Restarts (Priority: P2)
 
 As a property manager, I want the dirty/clean state to survive Home Assistant
 restarts and integration reloads, so that I never lose track of which properties
