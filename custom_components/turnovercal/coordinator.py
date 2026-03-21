@@ -273,6 +273,54 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             now: Current local time.
 
         """
+        current_active, present_uids, naive_uids = self._scan_active_stays(
+            rc_events, now
+        )
+
+        if self._previous_active_stays:
+            for uid, (start, end) in self._previous_active_stays.items():
+                if (
+                    uid not in current_active
+                    and uid not in present_uids
+                    and start <= now < end
+                ):
+                    try:
+                        await self._async_fire_midstay_cancellation(
+                            start,
+                        )
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.warning(
+                            "Failed to fire mid-stay cancellation for UID %s…",
+                            uid[:8],
+                            exc_info=True,
+                        )
+
+        # Retain tracking for UIDs that returned with naive datetimes
+        for uid in naive_uids:
+            if (
+                uid not in current_active
+                and self._previous_active_stays
+                and uid in self._previous_active_stays
+            ):
+                current_active[uid] = self._previous_active_stays[uid]
+
+        self._previous_active_stays = current_active
+
+    @staticmethod
+    def _scan_active_stays(
+        rc_events: list[CalendarEvent],
+        now: datetime,
+    ) -> tuple[
+        dict[str, tuple[datetime, datetime]],
+        set[str],
+        set[str],
+    ]:
+        """Scan RC events for currently active stays.
+
+        Returns:
+            Tuple of (current_active, present_uids, naive_uids).
+
+        """
         current_active: dict[str, tuple[datetime, datetime]] = {}
         present_uids: set[str] = set()
         naive_uids: set[str] = set()
@@ -289,36 +337,14 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             present_uids.add(uid)
             if ev_start.tzinfo is None or ev_end.tzinfo is None:
                 naive_uids.add(uid)
-                _LOGGER.warning(
-                    "Skipping reservation with naive datetime(s): start=%s, end=%s",
-                    ev_start,
-                    ev_end,
+                _LOGGER.debug(
+                    "Skipping reservation %s… with naive datetime(s)",
+                    uid[:8],
                 )
                 continue
             if ev_start <= now <= ev_end:
                 current_active[uid] = (ev_start, ev_end)
-
-        if self._previous_active_stays:
-            for uid, (start, end) in self._previous_active_stays.items():
-                if (
-                    uid not in current_active
-                    and uid not in present_uids
-                    and start <= now < end
-                ):
-                    await self._async_fire_midstay_cancellation(
-                        start,
-                    )
-
-        # Retain tracking for UIDs that returned with naive datetimes
-        for uid in naive_uids:
-            if (
-                uid not in current_active
-                and self._previous_active_stays
-                and uid in self._previous_active_stays
-            ):
-                current_active[uid] = self._previous_active_stays[uid]
-
-        self._previous_active_stays = current_active
+        return current_active, present_uids, naive_uids
 
     async def _async_fire_midstay_cancellation(
         self,
