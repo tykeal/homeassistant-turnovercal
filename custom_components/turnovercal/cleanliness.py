@@ -375,10 +375,7 @@ class CleanlinessStateMachine:
         - schedules a new timer for the remaining duration.
         """
         assert self._state is not None  # noqa: S101
-        if (
-            self._state.phase != PHASE_BEING_CLEANED
-            or self._state.timer_target is None
-        ):
+        if self._state.phase != PHASE_BEING_CLEANED or self._state.timer_target is None:
             return
 
         # Cancel any existing timer before reconstituting

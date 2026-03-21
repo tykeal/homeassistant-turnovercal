@@ -581,9 +581,7 @@ class TestCleanlinessStateMachineCallbacks:
         cb1.assert_called_once()
         cb2.assert_called_once()
 
-    async def test_fire_callbacks_continues_on_error(
-        self, hass: HomeAssistant
-    ) -> None:
+    async def test_fire_callbacks_continues_on_error(self, hass: HomeAssistant) -> None:
         """_fire_callbacks suppresses errors in one callback."""
         store = _make_mock_store()
 
