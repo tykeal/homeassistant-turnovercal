@@ -90,30 +90,30 @@ lifecycle.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Unit tests for `CleanlinessState` dataclass in
+- [X] T005 Unit tests for `CleanlinessState` dataclass in
       `tests/test_cleanliness.py`
       — test `to_dict()`/`from_dict()` round-trip for all fields, default clean
       state factory, phase value validation
-- [ ] T006 [P] Unit tests for `CleanlinessStateStore` in
+- [X] T006 [P] Unit tests for `CleanlinessStateStore` in
       `tests/test_cleanliness_store.py` — test `async_load()` returns None when
       no file, `async_save()`/`async_load()` round-trip,
       `async_delete()` removes persisted data
-- [ ] T007 [P] Unit tests for `CleanlinessStateMachine` skeleton in
+- [X] T007 [P] Unit tests for `CleanlinessStateMachine` skeleton in
       `tests/test_cleanliness.py` — test `async_initialize()` loads persisted
       state, creates default clean state when none exists, `async_shutdown()` is
       safe to call when no timer active, properties `is_dirty`/`phase` reflect
       current state
-- [ ] T008 Add `Platform.BINARY_SENSOR` to `PLATFORMS` list in
+- [X] T008 Add `Platform.BINARY_SENSOR` to `PLATFORMS` list in
       `custom_components/turnovercal/__init__.py` — update the `PLATFORMS`
       constant to include `Platform.BINARY_SENSOR` alongside existing
       `Platform.CALENDAR` and `Platform.SENSOR`
-- [ ] T009 Wire `CleanlinessStateMachine` into `async_setup_entry()` in
+- [X] T009 Wire `CleanlinessStateMachine` into `async_setup_entry()` in
       `custom_components/turnovercal/__init__.py` — after coordinator creation,
       instantiate `CleanlinessStateStore`, create `CleanlinessStateMachine`,
       call `async_initialize()`, store in
       `hass.data[DOMAIN][entry.entry_id]["cleanliness"]`. On unload in
       `async_unload_entry()`, call `async_shutdown()` on the state machine
-- [ ] T010 Add `cleaning_duration_hours` to options flow in
+- [X] T010 Add `cleaning_duration_hours` to options flow in
       `custom_components/turnovercal/config_flow.py` — add a new numeric field
       to `async_step_init` in `TurnoverCalOptionsFlow` with range
       `MIN_CLEANING_DURATION_HOURS` (0.05) to 24, default
@@ -122,7 +122,7 @@ lifecycle.
       `options.step.init.data` and
       `options.step.init.data_description`. Keep
       `translations/en.json` in sync
-- [ ] T011 [P] Unit tests for `cleaning_duration_hours` options flow in
+- [X] T011 [P] Unit tests for `cleaning_duration_hours` options flow in
       `tests/test_config_flow.py` — test default value (3), minimum boundary
       (0.05), maximum boundary (24), invalid values rejected, value persisted in
       entry options
