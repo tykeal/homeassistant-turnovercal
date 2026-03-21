@@ -47,6 +47,7 @@
           "summary_prefix": "Summary prefix",
           "property_name": "Property name",
           "trailing_duration_hours": "Trailing duration (hours)",
+          "cleaning_duration_hours": "Cleaning duration (hours)",
           "update_interval": "Update interval (minutes)",
           "lock_monitoring": "Enable lock monitoring",
           "regenerate_token": "Regenerate feed token"
@@ -56,6 +57,7 @@
           "summary_prefix": "Prefix added to turnover calendar event summaries.",
           "property_name": "Name of the property for event descriptions.",
           "trailing_duration_hours": "Hours after checkout to extend the turnover window.",
+          "cleaning_duration_hours": "Expected cleaning duration in hours. Auto-transitions from being cleaned to clean after this time.",
           "update_interval": "Minutes between calendar update checks.",
           "lock_monitoring": "Monitor a Keymaster-managed lock for cleaning code slot changes.",
           "regenerate_token": "Generate a new feed token, invalidating the current URL."

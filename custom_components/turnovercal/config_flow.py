@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
@@ -29,6 +30,7 @@ from homeassistant.helpers.selector import (
 from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
     CONF_CLEANING_CODE_SLOT,
+    CONF_CLEANING_DURATION_HOURS,
     CONF_EARLY_UNLOCK_GRACE_HOURS,
     CONF_KEYMASTER_DEVICE,
     CONF_LOCK_MONITORING,
@@ -38,6 +40,7 @@ from custom_components.turnovercal.const import (
     CONF_TRAILING_DURATION_HOURS,
     CONF_UPDATE_INTERVAL,
     DEFAULT_CLEANING_CODE_SLOT_MAX,
+    DEFAULT_CLEANING_DURATION_HOURS,
     DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
     DEFAULT_LOCK_MONITORING,
     DEFAULT_RETENTION_WEEKS,
@@ -47,6 +50,7 @@ from custom_components.turnovercal.const import (
     DOMAIN,
     KEYMASTER_DOMAIN,
     KM_LOCK_ENTITY_KEY,
+    MIN_CLEANING_DURATION_HOURS,
 )
 from custom_components.turnovercal.token import generate_token
 
@@ -450,6 +454,20 @@ class TurnoverCalOptionsFlow(OptionsFlow):
                 ),
             ): int,
             vol.Required(
+                CONF_CLEANING_DURATION_HOURS,
+                default=defaults.get(
+                    CONF_CLEANING_DURATION_HOURS,
+                    DEFAULT_CLEANING_DURATION_HOURS,
+                ),
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=MIN_CLEANING_DURATION_HOURS,
+                    max=24,
+                    step=0.05,
+                    mode=NumberSelectorMode.BOX,
+                ),
+            ),
+            vol.Required(
                 CONF_UPDATE_INTERVAL,
                 default=defaults.get(
                     CONF_UPDATE_INTERVAL,
@@ -635,6 +653,7 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         _max_retention = 52
         _max_trailing = 24
         _max_interval = 60
+        _max_cleaning_dur = 24
 
         def _is_int(val: object) -> bool:
             """Check if value is int but not bool."""
@@ -647,6 +666,19 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         trailing = user_input.get(CONF_TRAILING_DURATION_HOURS, 0)
         if not _is_int(trailing) or trailing < 1 or trailing > _max_trailing:
             errors[CONF_TRAILING_DURATION_HOURS] = "invalid_range"
+
+        cleaning_dur = user_input.get(
+            CONF_CLEANING_DURATION_HOURS,
+            DEFAULT_CLEANING_DURATION_HOURS,
+        )
+        if (
+            isinstance(cleaning_dur, bool)
+            or not isinstance(cleaning_dur, (int, float))
+            or not math.isfinite(cleaning_dur)
+            or cleaning_dur < MIN_CLEANING_DURATION_HOURS
+            or cleaning_dur > _max_cleaning_dur
+        ):
+            errors[CONF_CLEANING_DURATION_HOURS] = "invalid_range"
 
         interval = user_input.get(CONF_UPDATE_INTERVAL, 0)
         if not _is_int(interval) or interval < 1 or interval > _max_interval:
