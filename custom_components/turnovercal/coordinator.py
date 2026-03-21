@@ -275,6 +275,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         """
         current_active: dict[str, tuple[datetime, datetime]] = {}
         present_uids: set[str] = set()
+        naive_uids: set[str] = set()
         for ev in rc_events:
             uid = getattr(ev, "uid", None)
             ev_start = ev.start
@@ -287,6 +288,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
                 continue
             present_uids.add(uid)
             if ev_start.tzinfo is None or ev_end.tzinfo is None:
+                naive_uids.add(uid)
                 _LOGGER.warning(
                     "Skipping reservation with naive datetime(s): start=%s, end=%s",
                     ev_start,
@@ -307,8 +309,8 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
                         start,
                     )
 
-        # Retain tracking for UIDs present but with naive datetimes
-        for uid in present_uids:
+        # Retain tracking for UIDs that returned with naive datetimes
+        for uid in naive_uids:
             if (
                 uid not in current_active
                 and self._previous_active_stays
