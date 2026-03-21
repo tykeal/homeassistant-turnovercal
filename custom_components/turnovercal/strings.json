@@ -91,6 +91,11 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "dirty": {
+        "name": "Cleanliness"
+      }
+    },
     "calendar": {
       "turnover_calendar": {
         "name": "Turnover calendar"
