@@ -280,6 +280,23 @@ class TestTurnoverEventSerialization:
         assert restored.original_dtend == datetime(2026, 3, 10, 15, 0, tzinfo=ET)
         assert restored.original_dtstart == datetime(2026, 3, 10, 11, 0, tzinfo=ET)
 
+    def test_midstay_cancellation_flag_round_trip(self) -> None:
+        """created_from_midstay_cancellation survives round-trip."""
+        evt = _make_event()
+        evt.created_from_midstay_cancellation = True
+        data = evt.to_dict()
+        assert data["created_from_midstay_cancellation"] is True
+        restored = TurnoverEvent.from_dict(data)
+        assert restored.created_from_midstay_cancellation is True
+
+    def test_midstay_cancellation_flag_defaults_false(self) -> None:
+        """Flag defaults to False when key absent in dict."""
+        evt = _make_event()
+        data = evt.to_dict()
+        del data["created_from_midstay_cancellation"]
+        restored = TurnoverEvent.from_dict(data)
+        assert restored.created_from_midstay_cancellation is False
+
     def test_none_checkin_id_round_trip(self) -> None:
         """Trailing event with source_checkin_id=None survives round-trip."""
         evt = _make_event(source_checkin_id=None, is_trailing=True)

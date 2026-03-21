@@ -31,6 +31,7 @@ class TurnoverEvent:
     adjustment_source: str | None
     original_dtend: datetime | None
     original_dtstart: datetime | None
+    created_from_midstay_cancellation: bool
 
     def __init__(  # noqa: PLR0913
         self,
@@ -50,6 +51,7 @@ class TurnoverEvent:
         adjustment_source: str | None = None,
         original_dtend: datetime | None = None,
         original_dtstart: datetime | None = None,
+        created_from_midstay_cancellation: bool = False,
     ) -> None:
         """Initialize a TurnoverEvent with validation.
 
@@ -93,6 +95,7 @@ class TurnoverEvent:
         self.adjustment_source = adjustment_source
         self.original_dtend = original_dtend
         self.original_dtstart = original_dtstart
+        self.created_from_midstay_cancellation = created_from_midstay_cancellation
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize this event to a JSON-compatible dict.
@@ -129,6 +132,9 @@ class TurnoverEvent:
                 self.original_dtstart.replace(tzinfo=None).isoformat()
                 if self.original_dtstart is not None
                 else None
+            ),
+            "created_from_midstay_cancellation": (
+                self.created_from_midstay_cancellation
             ),
         }
 
@@ -178,6 +184,10 @@ class TurnoverEvent:
             adjustment_source=data.get("adjustment_source"),
             original_dtend=original_dtend,
             original_dtstart=original_dtstart,
+            created_from_midstay_cancellation=data.get(
+                "created_from_midstay_cancellation",
+                False,
+            ),
         )
 
 

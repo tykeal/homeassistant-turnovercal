@@ -25,6 +25,7 @@ from custom_components.turnovercal.const import (
     REASON_GUEST_CHECKIN,
     REASON_GUEST_CHECKOUT,
     REASON_LOCK_CODE_ENTRY,
+    REASON_MID_STAY_CANCELLATION,
     REASON_SERVICE_CALL_MARK_CLEAN,
     REASON_STARTUP_RECONCILIATION,
 )
@@ -234,7 +235,7 @@ class CleanlinessStateMachine:
         store: CleanlinessStateStore,
         cleaning_duration_hours: float,
         coverage_checker: Callable[[datetime], Awaitable[bool]] | None = None,
-        fallback_creator: Callable[[datetime], Awaitable[None]] | None = None,
+        fallback_creator: Callable[[datetime], Awaitable[str | None]] | None = None,
     ) -> None:
         """Initialize the cleanliness state machine.
 
@@ -246,7 +247,8 @@ class CleanlinessStateMachine:
             coverage_checker: Optional async callable that checks
                 whether a turnover event covers a given checkout time.
             fallback_creator: Optional async callable that creates a
-                fallback turnover event for a given checkout time.
+                fallback turnover event for a given checkout time
+                and returns the event's UID.
 
         """
         self._hass = hass
@@ -454,6 +456,66 @@ class CleanlinessStateMachine:
         )
         self._persist()
         self._fire_callbacks()
+
+    async def async_handle_midstay_cancellation(
+        self,
+        check_in_time: datetime,
+    ) -> str | None:
+        """Handle a mid-stay reservation cancellation.
+
+        Transitions the property to dirty with
+        ``phase=PHASE_AWAITING_CLEANING`` and
+        ``reason=REASON_MID_STAY_CANCELLATION``.  Creates an immediate
+        cleaning event via the ``fallback_creator`` delegate.
+
+        No-op when the check-in time has not yet passed (pre-arrival
+        cancellation per FR-011) or when the property is already in
+        ``PHASE_AWAITING_CLEANING`` or ``PHASE_BEING_CLEANED``.
+        Occupied properties transition to awaiting cleaning.
+
+        Args:
+            check_in_time: The original check-in time of the cancelled
+                reservation.
+
+        Returns:
+            UID of the fallback event created, or None.
+
+        """
+        assert self._state is not None  # noqa: S101
+
+        if not isinstance(check_in_time, datetime) or check_in_time.tzinfo is None:
+            msg = f"check_in_time must be a tz-aware datetime, got {check_in_time!r}"
+            raise ValueError(msg)
+
+        now = datetime.now(tz=_UTC)
+
+        # FR-011: pre-arrival cancellation -- check-in not yet passed
+        if check_in_time > now:
+            return None
+
+        # FR-025: already awaiting or undergoing cleaning -- skip
+        if self._state.phase in (
+            PHASE_AWAITING_CLEANING,
+            PHASE_BEING_CLEANED,
+        ):
+            return None
+
+        self._state = CleanlinessState(
+            is_dirty=True,
+            phase=PHASE_AWAITING_CLEANING,
+            last_transition_at=now,
+            last_transition_reason=REASON_MID_STAY_CANCELLATION,
+            dirty_since=self._state.dirty_since or now,
+            config_entry_id=self._entry_id,
+        )
+
+        created_uid: str | None = None
+        if self._fallback_creator is not None:
+            created_uid = await self._fallback_creator(now)
+
+        self._persist()
+        self._fire_callbacks()
+        return created_uid
 
     async def async_handle_lock_code(self) -> None:
         """Handle a cleaning lock code entry.

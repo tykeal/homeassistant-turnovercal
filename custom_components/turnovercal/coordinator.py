@@ -161,6 +161,18 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             return self._cache.get_events()
 
         try:
+            await self._async_detect_midstay_cancellations(
+                rc_events,
+                now,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "Mid-stay cancellation detection failed; "
+                "continuing with turnover computation",
+                exc_info=True,
+            )
+
+        try:
             computed = compute_turnover_events(
                 events=rc_events,
                 summary_prefix=self._summary_prefix,
@@ -200,12 +212,9 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         for uid in list(cached.keys()):
             if uid not in new_events:
                 cached_evt = cached[uid]
-                # Preserve lock-adjusted events even if their source
-                # booking was removed — the cleaner already confirmed.
-                if cached_evt.adjusted_by_lock:
+                if self._should_preserve(cached_evt, now):
                     continue
-                if cached_evt.dtend > now:
-                    await self._cache.async_remove_event(uid)
+                await self._cache.async_remove_event(uid)
 
         for evt in new_events.values():
             existing = cached.get(evt.uid)
@@ -217,6 +226,156 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
                 if not _event_changed(existing, evt):
                     continue
             await self._cache.async_add_event(evt)
+
+    @staticmethod
+    def _should_preserve(
+        cached_evt: TurnoverEvent,
+        now: datetime,
+    ) -> bool:
+        """Check whether a cached event should be preserved.
+
+        Events are preserved when they are lock-adjusted,
+        created from a mid-stay cancellation, or already in
+        the past.
+
+        Args:
+            cached_evt: The cached event to evaluate.
+            now: Current local time for past/future split.
+
+        Returns:
+            True if the event should be kept in cache.
+
+        """
+        if cached_evt.adjusted_by_lock:
+            return True
+        if cached_evt.created_from_midstay_cancellation:
+            return True
+        return cached_evt.dtend <= now
+
+    async def _async_detect_midstay_cancellations(
+        self,
+        rc_events: list[CalendarEvent],
+        now: datetime,
+    ) -> None:
+        """Detect reservations that disappeared mid-stay.
+
+        Compares the current set of active stays (check-in <= now
+        <= check-out) against the previous poll.  When a reservation
+        disappears while its stay period overlaps the current time,
+        the cleanliness state machine is notified so it can mark the
+        property dirty.
+
+        Pre-arrival cancellations (check-in > now) are excluded per
+        FR-011.
+
+        Args:
+            rc_events: Raw RC calendar events from the current poll.
+            now: Current local time.
+
+        """
+        current_active, present_uids, naive_uids = self._scan_active_stays(
+            rc_events, now
+        )
+
+        if self._previous_active_stays:
+            for uid, (start, end) in self._previous_active_stays.items():
+                if (
+                    uid not in current_active
+                    and uid not in present_uids
+                    and start <= now < end
+                ):
+                    try:
+                        await self._async_fire_midstay_cancellation(
+                            start,
+                        )
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.warning(
+                            "Failed to fire mid-stay cancellation for UID %s…",
+                            uid[:8],
+                            exc_info=True,
+                        )
+
+        # Retain tracking for UIDs that returned with naive datetimes
+        for uid in naive_uids:
+            if (
+                uid not in current_active
+                and self._previous_active_stays
+                and uid in self._previous_active_stays
+            ):
+                current_active[uid] = self._previous_active_stays[uid]
+
+        self._previous_active_stays = current_active
+
+    @staticmethod
+    def _scan_active_stays(
+        rc_events: list[CalendarEvent],
+        now: datetime,
+    ) -> tuple[
+        dict[str, tuple[datetime, datetime]],
+        set[str],
+        set[str],
+    ]:
+        """Scan RC events for currently active stays.
+
+        Returns:
+            Tuple of (current_active, present_uids, naive_uids).
+
+        """
+        current_active: dict[str, tuple[datetime, datetime]] = {}
+        present_uids: set[str] = set()
+        naive_uids: set[str] = set()
+        for ev in rc_events:
+            uid = getattr(ev, "uid", None)
+            if not uid:
+                continue
+            present_uids.add(uid)
+            ev_start = ev.start
+            ev_end = ev.end
+            if not isinstance(ev_start, datetime) or not isinstance(ev_end, datetime):
+                continue
+            if ev_start.tzinfo is None or ev_end.tzinfo is None:
+                naive_uids.add(uid)
+                _LOGGER.debug(
+                    "Skipping reservation %s… with naive datetime(s)",
+                    uid[:8],
+                )
+                continue
+            if ev_start <= now <= ev_end:
+                current_active[uid] = (ev_start, ev_end)
+        return current_active, present_uids, naive_uids
+
+    async def _async_fire_midstay_cancellation(
+        self,
+        check_in_time: datetime,
+    ) -> None:
+        """Notify the cleanliness state machine of a mid-stay cancel.
+
+        Looks up the cleanliness state machine via ``hass.data`` and
+        calls ``async_handle_midstay_cancellation``.  Uses the returned
+        UID to flag the created event so ``_merge_events`` preserves it.
+
+        Args:
+            check_in_time: Original check-in time of the cancelled
+                reservation.
+
+        """
+        if self._config_entry_id is None:
+            return
+
+        domain_data = self.hass.data.get(DOMAIN, {})
+        entry_data = domain_data.get(self._config_entry_id, {})
+        cleanliness = entry_data.get("cleanliness")
+        if cleanliness is None:
+            return
+
+        created_uid = await cleanliness.async_handle_midstay_cancellation(
+            check_in_time,
+        )
+        if created_uid is not None:
+            evt = self._cache.get_events().get(created_uid)
+            if evt is not None:
+                evt.created_from_midstay_cancellation = True
+                await self._cache.async_add_event(evt)
 
     @staticmethod
     def _merge_metadata(

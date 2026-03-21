@@ -228,7 +228,7 @@ def _build_coverage_delegates(  # noqa: PLR0913
     cleaning_duration: float,
 ) -> tuple[
     Callable[[datetime], Awaitable[bool]],
-    Callable[[datetime], Awaitable[None]],
+    Callable[[datetime], Awaitable[str | None]],
 ]:
     """Build coverage-checker and fallback-creator callables.
 
@@ -256,8 +256,8 @@ def _build_coverage_delegates(  # noqa: PLR0913
                 return True
         return False
 
-    async def _create(checkout_time: datetime) -> None:
-        """Create a fallback turnover event for the checkout."""
+    async def _create(checkout_time: datetime) -> str:
+        """Create a fallback turnover event and return its UID."""
         tz = ZoneInfo(tz_str)
         local_checkout = checkout_time.astimezone(tz)
         uid = f"{secrets.token_hex(8)}@turnovercal.homeassistant"
@@ -276,6 +276,7 @@ def _build_coverage_delegates(  # noqa: PLR0913
             is_trailing=True,
         )
         await cache.async_add_event(fallback)
+        return uid
 
     return _check, _create
 
@@ -407,6 +408,7 @@ async def async_setup_entry(
         lock_entity_id=lock_entity_id if lock_monitoring else None,
         cleaning_code_slot=cleaning_code_slot,
         grace_hours=grace_hours,
+        config_entry_id=entry.entry_id,
     )
 
     cleaning_duration = options.get(
