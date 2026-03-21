@@ -306,31 +306,31 @@ restarting the integration, and verifying the binary sensor still reads "on"
 
 - **FR-005**: System MUST transition a property to "dirty" when a guest check-in
   event is detected (RC signals guest arrival at the property).
-- **FR-005a**: On check-in dirty trigger, the system MUST first validate that a
+- **FR-006**: On check-in dirty trigger, the system MUST first validate that a
   turnover cleaning event already exists for the corresponding check-out period.
   Only if no such event exists MUST the system create a fallback cleaning event
   starting at the scheduled check-out time with a duration equal to
   `trailing_duration_hours`.
-- **FR-005b**: System MUST consume RC-provided check-in and check-out events or
+- **FR-007**: System MUST consume RC-provided check-in and check-out events or
   state changes via real-time HA event listeners to detect guest arrivals and
   departures during normal operation.
-- **FR-005c**: On startup or integration reload, the system MUST perform entity
+- **FR-008**: On startup or integration reload, the system MUST perform entity
   state reconciliation — checking the current state of RC-provided entities to
   detect any guest check-ins or check-outs that occurred during downtime — and
   triggering the appropriate dirty/phase state transitions for any missed
   events.
-- **FR-006**: System MUST transition a property to "dirty" when a booking is
+- **FR-009**: System MUST transition a property to "dirty" when a booking is
   removed from the reservation calendar while the guest is mid-stay (check-in
   time has passed but check-out time has not).
-- **FR-007**: System MUST detect mid-stay cancellations by comparing the current
+- **FR-010**: System MUST detect mid-stay cancellations by comparing the current
   set of active reservations against the previously known set during each
   polling cycle.
-- **FR-008**: System MUST NOT transition to "dirty" when a booking is cancelled
+- **FR-011**: System MUST NOT transition to "dirty" when a booking is cancelled
   before the guest's check-in time (pre-arrival cancellation).
 
 #### Clean Triggers
 
-- **FR-009**: When a cleaning lock code entry is detected (the same
+- **FR-012**: When a cleaning lock code entry is detected (the same
   adjusted_by_lock signal used for existing cleaning confirmation) and the
   property is dirty with `phase` = `awaiting_cleaning`, the system MUST
   transition the `phase` to `being_cleaned` (the property remains in the "dirty"
@@ -338,83 +338,83 @@ restarting the integration, and verifying the binary sensor still reads "on"
   directly to "clean" on lock code entry. If the property's `phase` is not
   `awaiting_cleaning` (e.g., `occupied`), the lock code entry performs only its
   existing event-adjustment behavior without changing the phase.
-- **FR-009a**: After transitioning to `being_cleaned`, the system MUST start a
+- **FR-013**: After transitioning to `being_cleaned`, the system MUST start a
   delayed timer equal to the configured `cleaning_duration_hours` (default: 3
   hours). When the timer fires, the system MUST automatically transition the
   property to "clean."
-- **FR-009b**: System MUST provide a configurable `cleaning_duration_hours`
+- **FR-014**: System MUST provide a configurable `cleaning_duration_hours`
   option (per config entry) that controls the delay between cleaner lock code
   entry and automatic clean transition. Default value:
   3 hours. Minimum value: 0.05 hours (3 minutes). A
   strictly positive minimum is required to guarantee
   that the property does not transition directly to
-  "clean" on lock code entry, consistent with FR-009.
+  "clean" on lock code entry, consistent with FR-012.
   The value is specified as a decimal number of hours.
   This option MUST be exposed in the integration's
   config flow (options flow) so property managers can
   adjust it without YAML editing.
-- **FR-009c**: If `mark_clean` is called while a cleaning duration timer is
+- **FR-015**: If `mark_clean` is called while a cleaning duration timer is
   active, the timer MUST be cancelled and the property MUST transition to
   "clean" immediately.
-- **FR-009d**: If `mark_dirty` is called while a cleaning duration timer is
+- **FR-016**: If `mark_dirty` is called while a cleaning duration timer is
   active, the timer MUST be cancelled and the property MUST transition to
   "dirty" with `phase` = `awaiting_cleaning`.
-- **FR-009e**: If a guest check-in occurs while a cleaning duration timer is
+- **FR-017**: If a guest check-in occurs while a cleaning duration timer is
   active, the timer MUST be cancelled, the property MUST remain dirty with
   `phase` = `occupied`, and cleaning event coverage MUST be validated for the
   new guest's check-out.
-- **FR-009f**: The cleaning duration timer's target completion time MUST be
+- **FR-018**: The cleaning duration timer's target completion time MUST be
   persisted so it survives Home Assistant restarts. On restart, if the target
   time has passed, the system MUST transition to "clean" immediately; otherwise,
   the system MUST reconstitute the timer for the remaining duration.
-- **FR-010**: System MUST transition a property to "clean" immediately (no
+- **FR-019**: System MUST transition a property to "clean" immediately (no
   delay) when the property manager calls the `mark_clean` service action,
   regardless of the current phase. Any active cleaning duration timer MUST be
   cancelled.
 
 #### Manual Override
 
-- **FR-011**: System MUST provide a `turnovercal.mark_dirty` service action that
+- **FR-020**: System MUST provide a `turnovercal.mark_dirty` service action that
   forces a property to the "dirty" state regardless of its current state.
-- **FR-012**: System MUST provide a `turnovercal.mark_clean` service action that
+- **FR-021**: System MUST provide a `turnovercal.mark_clean` service action that
   forces a property to the "clean" state regardless of its current state.
-- **FR-013**: Both service actions MUST accept targeting by entity (binary
+- **FR-022**: Both service actions MUST accept targeting by entity (binary
   sensor or calendar) or by config entry ID, consistent with the existing
   `mark_cleaning_started` service pattern.
 
 #### Cleaning Event Generation
 
-- **FR-014**: When a property transitions to "dirty" via check-in trigger, the
+- **FR-023**: When a property transitions to "dirty" via check-in trigger, the
   system MUST validate that a turnover cleaning event exists for the
   corresponding check-out. If none exists, the system MUST generate a fallback
   cleaning event.
-- **FR-015**: Fallback cleaning events from check-in validation MUST start at
+- **FR-024**: Fallback cleaning events from check-in validation MUST start at
   the scheduled check-out time and have a duration equal to the configured
   `trailing_duration_hours`. Immediate cleaning events from `mark_dirty` service
   actions MUST start at the current time and have a
   duration equal to the configured
   `trailing_duration_hours`.
-- **FR-016**: System MUST NOT generate a new automatic cleaning event if one
+- **FR-025**: System MUST NOT generate a new automatic cleaning event if one
   already exists for the current dirty period.
-- **FR-017**: When a property transitions to "clean," the system MUST stop
+- **FR-026**: When a property transitions to "clean," the system MUST stop
   generating new automatic cleaning events.
-- **FR-018**: Existing lock-adjusted events MUST be preserved when a property
+- **FR-027**: Existing lock-adjusted events MUST be preserved when a property
   transitions to "clean" (they are not removed or modified).
-- **FR-019**: Cleaning events created from mid-stay cancellations MUST be
+- **FR-028**: Cleaning events created from mid-stay cancellations MUST be
   preserved even if the source booking disappears from the reservation calendar.
 
 #### Binary Sensor
 
-- **FR-020**: System MUST expose the cleanliness state as a `binary_sensor`
+- **FR-029**: System MUST expose the cleanliness state as a `binary_sensor`
   entity under the property's existing device.
-- **FR-021**: The binary sensor MUST report "on" when the property is dirty and
+- **FR-030**: The binary sensor MUST report "on" when the property is dirty and
   "off" when the property is clean.
-- **FR-022**: The binary sensor MUST include attributes for the last state
+- **FR-031**: The binary sensor MUST include attributes for the last state
   change timestamp, the reason for the transition (e.g., "guest_checkin,"
   "mid_stay_cancellation," "lock_code_entry," "cleaning_duration_elapsed,"
   "service_call_mark_clean," "service_call_mark_dirty"), and a `phase` attribute
   indicating the property's lifecycle phase.
-- **FR-022a**: The `phase` attribute MUST report one of exactly four values:
+- **FR-032**: The `phase` attribute MUST report one of exactly four values:
   `occupied` when a guest is actively staying (between check-in and check-out),
   `awaiting_cleaning` after the guest checks out while the property remains
   dirty and no cleaner has started, `being_cleaned` after a cleaning lock code
@@ -423,7 +423,7 @@ restarting the integration, and verifying the binary sensor still reads "on"
   lifecycle is a repeating cycle starting from `clean`:
   `clean` → `occupied` → `awaiting_cleaning` →
   `being_cleaned` → `clean`.
-- **FR-022b**: On detection of a guest check-out event (while the property is
+- **FR-033**: On detection of a guest check-out event (while the property is
   dirty), the system MUST transition the `phase` attribute from `occupied` to
   `awaiting_cleaning`. On a mid-stay cancellation dirty trigger, the `phase`
   MUST be set to `awaiting_cleaning` (the guest's stay is terminated). On a
@@ -434,7 +434,7 @@ restarting the integration, and verifying the binary sensor still reads "on"
   transition the `phase` to `clean`. The `awaiting_cleaning` phase is the
   canonical value for all dirty-but-no-cleaner-started states; the
   `being_cleaned` phase indicates active cleaning in progress.
-- **FR-023**: The binary sensor entity ID MUST be derived
+- **FR-034**: The binary sensor entity ID MUST be derived
   using this integration's standard naming convention
   (config entry title + translation key for the
   cleanliness binary sensor) rather than a hard-coded
@@ -463,8 +463,8 @@ restarting the integration, and verifying the binary sensor still reads "on"
   `being_cleaned`, `clean`) to distinguish sub-states within the dirty/cleaning
   lifecycle. Phase values and the cyclic `clean` →
   `occupied` check-in transition are defined in
-  **FR-022a**; post-check-out/dirty/cleaning
-  transitions are defined in **FR-022b** and together
+  **FR-032**; post-check-out/dirty/cleaning
+  transitions are defined in **FR-033** and together
   these define the full phase lifecycle.
 
 ### Assumptions
