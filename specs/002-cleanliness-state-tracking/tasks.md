@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 **Input**: Design documents from `/specs/002-cleanliness-state-tracking/`
 **Prerequisites**: spec.md (user stories US1–US6, FR-001–FR-034, edge cases)
 **Existing Codebase**: `custom_components/turnovercal/` (coordinator, models,
-event_cache, services, config_flow, calendar, sensor, **init**)
+event_cache, services, config_flow, calendar, sensor, `__init__`)
 
 **Tests**: Unit tests are REQUIRED per the project constitution (TDD is
 NON-NEGOTIABLE). Every user story phase MUST include unit test tasks written
@@ -18,7 +18,7 @@ requires cross-component verification.
 **Organization**: Tasks are grouped by user story to enable independent
 implementation and testing of each story.
 
-## Format: `[ID] [P?] [Story] Description`
+## Format: `ID [P?] [Story] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies)
 - **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
@@ -62,9 +62,9 @@ stories. No behavioral logic yet — just the scaffolding.
       `CLEANLINESS_STORE_VERSION`). Methods:
       `async_load() -> CleanlinessState | None`,
       `async_save(state: CleanlinessState)`, `async_delete()`. Follow the
-      `EventCache` persistence pattern but simpler (single object, not a dict of
-      events). Initialize default state as clean with `phase=PHASE_CLEAN` when
-      no persisted state exists
+      `EventCache` persistence pattern but simpler (single object,
+      not a dict of events). Returns `None` when no persisted
+      state exists (state machine handles default creation)
 - [ ] T004 Create `CleanlinessStateMachine` class in
       `custom_components/turnovercal/cleanliness.py` — skeleton with `__init__`
       accepting `hass`, `entry_id`, `store` (CleanlinessStateStore),
@@ -89,8 +89,8 @@ lifecycle.
       state factory, phase value validation
 - [ ] T006 [P] Unit tests for `CleanlinessStateStore` in
       `tests/test_cleanliness_store.py` — test `async_load()` returns None when
-      no file, `async_save()`/`async_load()` round-trip, `async_delete()`
-      removes persisted data, default clean state creation on first load
+      no file, `async_save()`/`async_load()` round-trip,
+      `async_delete()` removes persisted data
 - [ ] T007 [P] Unit tests for `CleanlinessStateMachine` skeleton in
       `tests/test_cleanliness.py` — test `async_initialize()` loads persisted
       state, creates default clean state when none exists, `async_shutdown()` is
@@ -156,7 +156,8 @@ newly configured property.
       Device info matches existing entities with identifiers
       `(DOMAIN, entry_id)`. The `is_on` property reads from the
       `CleanlinessStateMachine` (retrieved from
-      `hass.data[DOMAIN][entry_id]["cleanliness"]`). Extra state attributes:
+      `hass.data[DOMAIN][entry.entry_id]["cleanliness"]`).
+      Extra state attributes:
       `phase` (from state machine), `last_changed` (ISO string of last
       transition), `reason` (transition reason string). Implement
       `async_setup_entry()` platform function
@@ -381,8 +382,9 @@ to clean). Alternatively, call `mark_clean` to verify immediate transition.
       `custom_components/turnovercal/coordinator.py` — in `handle_lock_event()`,
       after existing `apply_cleaning_signal()` call, also call
       `cleanliness.async_handle_lock_code()` on the state machine (retrieved
-      from `hass.data[DOMAIN][entry_id]["cleanliness"]`). This connects the
-      existing Keymaster integration with the new cleanliness tracking
+      from `hass.data[DOMAIN][entry.entry_id]["cleanliness"]`).
+      This connects the existing Keymaster integration with the
+      new cleanliness tracking
 - [ ] T037 [US2] Register `mark_clean` and `mark_dirty` service actions in
       `custom_components/turnovercal/services.py` — add
       `SERVICE_MARK_CLEAN = "mark_clean"` and
@@ -509,7 +511,9 @@ calendar.
 - [ ] T047 [US5] Wire `mark_dirty` service handler in
       `custom_components/turnovercal/services.py` — the handler (registered in
       T037) calls `cleanliness.async_mark_dirty()`. Ensure it resolves the state
-      machine from `hass.data[DOMAIN][entry_id]["cleanliness"]` and handles the
+      machine from
+      `hass.data[DOMAIN][entry.entry_id]["cleanliness"]`
+      and handles the
       immediate cleaning event creation through the state machine's coordinator
       delegate
 
