@@ -1624,11 +1624,11 @@ class TestAsyncHandleMidstayCancellation:
         assert machine.phase == PHASE_AWAITING_CLEANING
 
     @freeze_time("2026-03-15T14:00:00+00:00")
-    async def test_occupied_stays_dirty_no_duplicate(
+    async def test_occupied_transitions_to_awaiting_cleaning(
         self,
         hass: HomeAssistant,
     ) -> None:
-        """Occupied property stays dirty, no duplicate event."""
+        """Occupied property transitions to awaiting cleaning."""
         persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
         store = _make_mock_store(persisted_state=persisted)
         fallback = AsyncMock()
@@ -1645,6 +1645,33 @@ class TestAsyncHandleMidstayCancellation:
         await machine.async_handle_midstay_cancellation(checkin)
 
         assert machine.is_dirty is True
+        assert machine.phase == PHASE_AWAITING_CLEANING
+        fallback.assert_awaited_once()
+
+    @freeze_time("2026-03-15T14:00:00+00:00")
+    async def test_awaiting_cleaning_noop(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Already awaiting cleaning is a no-op."""
+        persisted = _make_dirty_state(
+            phase=PHASE_AWAITING_CLEANING,
+        )
+        store = _make_mock_store(persisted_state=persisted)
+        fallback = AsyncMock()
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+            fallback_creator=fallback,
+        )
+        await machine.async_initialize()
+
+        checkin = datetime(2026, 3, 14, 10, 0, tzinfo=UTC)
+        await machine.async_handle_midstay_cancellation(checkin)
+
+        assert machine.phase == PHASE_AWAITING_CLEANING
         fallback.assert_not_awaited()
 
     @freeze_time("2026-03-15T14:00:00+00:00")

@@ -466,8 +466,9 @@ class CleanlinessStateMachine:
         cleaning event via the ``fallback_creator`` delegate.
 
         No-op when the check-in time has not yet passed (pre-arrival
-        cancellation per FR-011) or when the property is already dirty
-        (FR-025).
+        cancellation per FR-011) or when the property is already in
+        ``PHASE_AWAITING_CLEANING`` or ``PHASE_BEING_CLEANED``.
+        Occupied properties transition to awaiting cleaning.
 
         Args:
             check_in_time: The original check-in time of the cancelled
@@ -486,9 +487,17 @@ class CleanlinessStateMachine:
         if check_in_time > now:
             return
 
-        # FR-025: already dirty -- no duplicate cleaning event
-        if self._state.is_dirty:
+        # FR-025: already awaiting or undergoing cleaning -- skip
+        if self._state.phase in (
+            PHASE_AWAITING_CLEANING,
+            PHASE_BEING_CLEANED,
+        ):
             return
+
+        # Cancel cleaning timer if transitioning from being_cleaned
+        if self._timer_unsub is not None:
+            self._timer_unsub()
+            self._timer_unsub = None
 
         self._state = CleanlinessState(
             is_dirty=True,
