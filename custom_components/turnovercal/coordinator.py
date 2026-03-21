@@ -160,7 +160,17 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             )
             return self._cache.get_events()
 
-        await self._async_detect_midstay_cancellations(rc_events, now)
+        try:
+            await self._async_detect_midstay_cancellations(
+                rc_events,
+                now,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "Mid-stay cancellation detection failed; "
+                "continuing with turnover computation",
+                exc_info=True,
+            )
 
         try:
             computed = compute_turnover_events(
