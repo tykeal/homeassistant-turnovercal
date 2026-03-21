@@ -14,11 +14,14 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
+from homeassistant.helpers.event import async_track_point_in_time
+
 from custom_components.turnovercal.const import (
     PHASE_AWAITING_CLEANING,
     PHASE_BEING_CLEANED,
     PHASE_CLEAN,
     PHASE_OCCUPIED,
+    REASON_CLEANING_DURATION_ELAPSED,
     REASON_STARTUP_RECONCILIATION,
 )
 
@@ -284,11 +287,19 @@ class CleanlinessStateMachine:
         """Load state from store or create default clean state.
 
         If a persisted state exists in the store it is used directly.
-        Otherwise a default *clean* state is created and saved.
+        Otherwise a default *clean* state is created and its
+        persistence is scheduled via the store.
+
+        When the loaded state has ``phase=PHASE_BEING_CLEANED`` with a
+        ``timer_target``, the timer is reconstituted:
+        - If the target time has already passed the state transitions
+          to clean immediately.
+        - Otherwise a timer is scheduled for the remaining duration.
         """
         loaded = await self._store.async_load()
         if loaded is not None:
             self._state = loaded
+            await self._async_reconstitute_timer()
         else:
             now = datetime.now(tz=_UTC)
             self._state = CleanlinessState(
@@ -298,7 +309,7 @@ class CleanlinessStateMachine:
                 last_transition_reason=REASON_STARTUP_RECONCILIATION,
                 config_entry_id=self._entry_id,
             )
-            await self._store.async_save(self._state)
+            self._persist()
 
     async def async_shutdown(self) -> None:
         """Cancel any active timer and clean up resources."""
@@ -337,16 +348,80 @@ class CleanlinessStateMachine:
         if callback in self._callbacks:
             self._callbacks.remove(callback)
 
-    def _notify_callbacks(self) -> None:
-        """Invoke all registered callbacks after a state transition.
+    def _persist(self) -> None:
+        """Schedule a batched save of the current state to the store."""
+        if self._state is not None:
+            self._store.schedule_save(self._state)
 
-        Called by transition methods after the internal state has been
-        updated and persisted.  Each callback is invoked in
-        registration order; exceptions are suppressed so one failing
-        listener cannot prevent others from executing.
-        """
-        for cb in list(self._callbacks):
+    def _fire_callbacks(self) -> None:
+        """Invoke all registered state-change callbacks."""
+        for callback in list(self._callbacks):
             try:
-                cb()
+                callback()
             except Exception:
-                _LOGGER.exception("Error in cleanliness callback")
+                _LOGGER.exception(
+                    "Error in cleanliness callback: %r",
+                    callback,
+                )
+
+    async def _async_reconstitute_timer(self) -> None:
+        """Reconstitute a cleaning timer after restart if needed.
+
+        Called during ``async_initialize()`` when a persisted state is
+        loaded.  If the state has ``phase=PHASE_BEING_CLEANED`` with a
+        ``timer_target``, either:
+        - transitions to clean immediately when the target has passed,
+          or
+        - schedules a new timer for the remaining duration.
+        """
+        assert self._state is not None  # noqa: S101
+        if (
+            self._state.phase != PHASE_BEING_CLEANED
+            or self._state.timer_target is None
+        ):
+            return
+
+        # Cancel any existing timer before reconstituting
+        if self._timer_unsub is not None:
+            self._timer_unsub()
+            self._timer_unsub = None
+
+        target = self._state.timer_target
+        now = datetime.now(tz=_UTC)
+        if target <= now:
+            self._state = CleanlinessState(
+                is_dirty=False,
+                phase=PHASE_CLEAN,
+                last_transition_at=now,
+                last_transition_reason=REASON_CLEANING_DURATION_ELAPSED,
+                config_entry_id=self._entry_id,
+            )
+            self._persist()
+            self._fire_callbacks()
+        else:
+            self._timer_unsub = async_track_point_in_time(
+                self._hass,
+                self._async_timer_expired,
+                target,
+            )
+
+    async def _async_timer_expired(self, _now: datetime) -> None:
+        """Handle cleaning timer expiry.
+
+        Transitions the state to clean, clears the timer, persists
+        the state, and fires registered callbacks.
+
+        Args:
+            _now: The datetime at which the timer fired.
+
+        """
+        self._state = CleanlinessState(
+            is_dirty=False,
+            phase=PHASE_CLEAN,
+            last_transition_at=_now,
+            last_transition_reason=REASON_CLEANING_DURATION_ELAPSED,
+            config_entry_id=self._entry_id,
+        )
+        self._timer_unsub = None
+        self._persist()
+        self._fire_callbacks()
