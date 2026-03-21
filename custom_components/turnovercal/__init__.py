@@ -14,9 +14,12 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_track_time_interval
 
+from custom_components.turnovercal.cleanliness import CleanlinessStateMachine
+from custom_components.turnovercal.cleanliness_store import CleanlinessStateStore
 from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
     CONF_CLEANING_CODE_SLOT,
+    CONF_CLEANING_DURATION_HOURS,
     CONF_EARLY_UNLOCK_GRACE_HOURS,
     CONF_KEYMASTER_DEVICE,
     CONF_LOCK_MONITORING,
@@ -25,6 +28,7 @@ from custom_components.turnovercal.const import (
     CONF_SUMMARY_PREFIX,
     CONF_TRAILING_DURATION_HOURS,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_CLEANING_DURATION_HOURS,
     DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
     DEFAULT_LOCK_MONITORING,
     DEFAULT_RETENTION_WEEKS,
@@ -53,7 +57,7 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.CALENDAR, Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.CALENDAR, Platform.SENSOR]
 
 
 def _resolve_lock_entity(
@@ -212,9 +216,23 @@ async def async_setup_entry(
         grace_hours=grace_hours,
     )
 
+    cleaning_duration = options.get(
+        CONF_CLEANING_DURATION_HOURS,
+        DEFAULT_CLEANING_DURATION_HOURS,
+    )
+    cleanliness_store = CleanlinessStateStore(hass, entry.entry_id)
+    state_machine = CleanlinessStateMachine(
+        hass=hass,
+        entry_id=entry.entry_id,
+        store=cleanliness_store,
+        cleaning_duration_hours=cleaning_duration,
+    )
+    await state_machine.async_initialize()
+
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
         "cache": cache,
+        "cleanliness": state_machine,
         "feed_token": feed_token,
         "timezone_str": tz_str,
         "summary_prefix": summary_prefix,
@@ -316,6 +334,11 @@ async def async_unload_entry(
     domain_data = hass.data.get(DOMAIN)
     if domain_data is None:
         return True
+    cleanliness = domain_data.get(entry.entry_id, {}).get(
+        "cleanliness",
+    )
+    if cleanliness is not None:
+        await cleanliness.async_shutdown()
     coordinator = domain_data.get(entry.entry_id, {}).get(
         "coordinator",
     )

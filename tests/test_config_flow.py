@@ -22,6 +22,7 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.turnovercal.const import (
     CONF_CALENDAR_ENTITY,
     CONF_CLEANING_CODE_SLOT,
+    CONF_CLEANING_DURATION_HOURS,
     CONF_EARLY_UNLOCK_GRACE_HOURS,
     CONF_KEYMASTER_DEVICE,
     CONF_LOCK_MONITORING,
@@ -30,12 +31,14 @@ from custom_components.turnovercal.const import (
     CONF_SUMMARY_PREFIX,
     CONF_TRAILING_DURATION_HOURS,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_CLEANING_DURATION_HOURS,
     DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
     DEFAULT_RETENTION_WEEKS,
     DEFAULT_SUMMARY_PREFIX,
     DEFAULT_TRAILING_DURATION_HOURS,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    MIN_CLEANING_DURATION_HOURS,
 )
 
 if TYPE_CHECKING:
@@ -1571,3 +1574,188 @@ class TestOptionsFlowLockSettings:
 
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert entry.data["feed_token"] == _REGEN_TOKEN
+
+
+# ---------------------------------------------------------------------------
+# Options flow - cleaning duration settings
+# ---------------------------------------------------------------------------
+
+
+class TestOptionsFlowCleaningDuration:
+    """Tests for cleaning_duration_hours in options flow."""
+
+    @staticmethod
+    def _create_entry(hass: HomeAssistant) -> MockConfigEntry:
+        """Create and register a MockConfigEntry for options tests."""
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_CALENDAR_ENTITY: "calendar.rental_control_beach_house",
+                "feed_token": _EXISTING_TOKEN,
+                CONF_LOCK_MONITORING: False,
+            },
+            options={
+                CONF_PROPERTY_NAME: "Beach House",
+                CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+                CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+                CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
+                CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+            },
+            unique_id="calendar.rental_control_beach_house",
+        )
+        entry.add_to_hass(hass)
+        return entry
+
+    @staticmethod
+    def _base_input(**overrides: Any) -> dict[str, Any]:  # noqa: ANN401
+        """Build a valid options user_input with optional overrides."""
+        data: dict[str, Any] = {
+            CONF_RETENTION_WEEKS: DEFAULT_RETENTION_WEEKS,
+            CONF_SUMMARY_PREFIX: DEFAULT_SUMMARY_PREFIX,
+            CONF_TRAILING_DURATION_HOURS: DEFAULT_TRAILING_DURATION_HOURS,
+            CONF_CLEANING_DURATION_HOURS: DEFAULT_CLEANING_DURATION_HOURS,
+            CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL,
+            CONF_PROPERTY_NAME: "Beach House",
+        }
+        data.update(overrides)
+        return data
+
+    async def test_form_shows_cleaning_duration_field(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Options form includes the cleaning_duration_hours field."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "init"
+        assert CONF_CLEANING_DURATION_HOURS in _schema_keys(result)
+
+    async def test_default_value_accepted(self, hass: HomeAssistant) -> None:
+        """Default cleaning duration (3) is accepted and persisted."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input=self._base_input(),
+        )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert (
+            result["data"][CONF_CLEANING_DURATION_HOURS]
+            == DEFAULT_CLEANING_DURATION_HOURS
+        )
+
+    async def test_minimum_boundary_accepted(self, hass: HomeAssistant) -> None:
+        """Minimum cleaning duration (0.05) is accepted."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input=self._base_input(
+                **{CONF_CLEANING_DURATION_HOURS: MIN_CLEANING_DURATION_HOURS},
+            ),
+        )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert (
+            result["data"][CONF_CLEANING_DURATION_HOURS] == MIN_CLEANING_DURATION_HOURS
+        )
+
+    async def test_maximum_boundary_accepted(self, hass: HomeAssistant) -> None:
+        """Maximum cleaning duration (24) is accepted."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input=self._base_input(
+                **{CONF_CLEANING_DURATION_HOURS: 24},
+            ),
+        )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["data"][CONF_CLEANING_DURATION_HOURS] == 24
+
+    async def test_below_minimum_rejected(self, hass: HomeAssistant) -> None:
+        """Cleaning duration below minimum (0.01) is rejected by selector."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        with pytest.raises(InvalidData):
+            await hass.config_entries.options.async_configure(
+                result["flow_id"],
+                user_input=self._base_input(
+                    **{CONF_CLEANING_DURATION_HOURS: 0.01},
+                ),
+            )
+
+    async def test_above_maximum_rejected(self, hass: HomeAssistant) -> None:
+        """Cleaning duration above maximum (25) is rejected by selector."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        with pytest.raises(InvalidData):
+            await hass.config_entries.options.async_configure(
+                result["flow_id"],
+                user_input=self._base_input(
+                    **{CONF_CLEANING_DURATION_HOURS: 25},
+                ),
+            )
+
+    async def test_zero_rejected(self, hass: HomeAssistant) -> None:
+        """Cleaning duration of zero is rejected by selector."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        with pytest.raises(InvalidData):
+            await hass.config_entries.options.async_configure(
+                result["flow_id"],
+                user_input=self._base_input(
+                    **{CONF_CLEANING_DURATION_HOURS: 0},
+                ),
+            )
+
+    async def test_negative_rejected(self, hass: HomeAssistant) -> None:
+        """Cleaning duration of negative value is rejected by selector."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        with pytest.raises(InvalidData):
+            await hass.config_entries.options.async_configure(
+                result["flow_id"],
+                user_input=self._base_input(
+                    **{CONF_CLEANING_DURATION_HOURS: -1},
+                ),
+            )
+
+    async def test_custom_value_persisted(self, hass: HomeAssistant) -> None:
+        """Custom cleaning duration (5.5) is persisted in entry options."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input=self._base_input(
+                **{CONF_CLEANING_DURATION_HOURS: 5.5},
+            ),
+        )
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["data"][CONF_CLEANING_DURATION_HOURS] == 5.5
+
+    async def test_boolean_false_rejected(self, hass: HomeAssistant) -> None:
+        """Boolean False coerces to 0.0 which is below minimum."""
+        entry = self._create_entry(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        with pytest.raises(InvalidData):
+            await hass.config_entries.options.async_configure(
+                result["flow_id"],
+                user_input=self._base_input(
+                    **{CONF_CLEANING_DURATION_HOURS: False},
+                ),
+            )
