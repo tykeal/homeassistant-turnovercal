@@ -18,7 +18,7 @@ should be scheduled. The state is persisted so it survives restarts."
 
 As a property manager, I want the system to automatically recognize that my
 property will need cleaning as soon as a guest arrives, so that the system
-validates a cleaning event exists (or creates a fallback) on the turnover
+validates that a cleaning event exists (or creates a fallback) on the turnover
 calendar without any manual intervention.
 
 When a guest checks in (RC signals a check-in event), the property transitions
@@ -46,7 +46,7 @@ a cleaning event appears on the calendar.
    turnover event covers the corresponding check-out, **When** the system
    validates cleaning coverage, **Then** a fallback cleaning event is created
    starting at the scheduled check-out time with a duration equal to the
-   configured trailing duration hours.
+   configured `trailing_duration_hours`.
 3. **Given** a property that just became dirty via check-in and an existing
    turnover event already covers the corresponding
    check-out, **When** the system
@@ -543,7 +543,8 @@ restarting the integration, and verifying the binary sensor still reads "on"
   needed for those cases; the new `being_cleaned` phase is exclusively for
   post-lock-code-entry cleaning in progress.
 - Q: What phase should the property enter when a cleaner uses their lock code? →
-  A: New `being_cleaned` phase. The phase lifecycle is: `occupied` →
+  A: New `being_cleaned` phase. The dirty-phase
+  sub-lifecycle is: `occupied` →
   `awaiting_cleaning` → `being_cleaned` → `clean`. Lock code entry transitions
   to `being_cleaned`, not directly to `clean`.
 - Q: Should the property be marked clean immediately when the cleaner code is
