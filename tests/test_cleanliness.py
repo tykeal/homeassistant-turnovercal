@@ -1646,3 +1646,22 @@ class TestAsyncHandleMidstayCancellation:
 
         assert machine.is_dirty is True
         fallback.assert_not_awaited()
+
+    @freeze_time("2026-03-15T14:00:00+00:00")
+    async def test_naive_datetime_raises_value_error(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Naive check-in time raises ValueError."""
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        naive = datetime(2026, 3, 14, 10, 0)  # noqa: DTZ001
+        with pytest.raises(ValueError, match="tz-aware"):
+            await machine.async_handle_midstay_cancellation(naive)

@@ -407,6 +407,7 @@ async def async_setup_entry(
         lock_entity_id=lock_entity_id if lock_monitoring else None,
         cleaning_code_slot=cleaning_code_slot,
         grace_hours=grace_hours,
+        config_entry_id=entry.entry_id,
     )
 
     cleaning_duration = options.get(

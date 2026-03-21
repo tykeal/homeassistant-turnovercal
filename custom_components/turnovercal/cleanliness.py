@@ -476,6 +476,10 @@ class CleanlinessStateMachine:
         """
         assert self._state is not None  # noqa: S101
 
+        if not isinstance(check_in_time, datetime) or check_in_time.tzinfo is None:
+            msg = f"check_in_time must be a tz-aware datetime, got {check_in_time!r}"
+            raise ValueError(msg)
+
         now = datetime.now(tz=_UTC)
 
         # FR-011: pre-arrival cancellation -- check-in not yet passed
