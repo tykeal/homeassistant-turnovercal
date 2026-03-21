@@ -170,10 +170,15 @@ newly configured property.
       `is_on` property reads from the
       `CleanlinessStateMachine` (retrieved from
       `hass.data[DOMAIN][entry.entry_id]["cleanliness"]`).
-      Implement `async_get_last_extra_data()` restore
-      behavior to load state from RestoreEntity on startup
-      as a fast-path before the store loads. Extra state
-      attributes: `phase` (from state machine),
+      Implement restore behavior using
+      `async_get_last_state()` (typically from
+      `async_added_to_hass()`) to load the last known
+      state and attributes from `RestoreEntity` on startup
+      as a fast-path before the store loads. Only use
+      `async_get_last_extra_data()` and an
+      `ExtraStoredData` subclass if additional non-state
+      data must be persisted. Extra state attributes:
+      `phase` (from state machine),
       `last_transition_at` (ISO string of last transition),
       `last_transition_reason` (transition reason string).
       Implement `async_setup_entry()` platform function

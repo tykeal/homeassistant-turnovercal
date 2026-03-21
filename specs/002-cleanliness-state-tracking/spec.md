@@ -443,7 +443,7 @@ restarting the integration, and verifying the binary sensor still reads "on"
   (config entry title + translation key) rather than
   hard-coded string concatenation. The translation key
   `"dirty"` MUST be used, producing entity IDs like
-  `binary_sensor.turnovercal_<property_name>_dirty`
+  `binary_sensor.<config_entry_title_slug>_dirty`
   through HA's standard entity ID derivation. The
   translation key MUST be stable so that entity IDs
   remain predictable for automations.

@@ -236,8 +236,7 @@ ConfigEntry (1) ──── (1) TurnoverCoordinator
 |                         | `CleanlinessState` dataclass, |
 |                         | `CleanlinessStateMachine`     |
 | `cleanliness_store.py`  | HA Store wrapper              |
-| `binary_sensor.py`      | `TurnoverCalCleanliness-`     |
-|                         | `Sensor`                      |
+| `binary_sensor.py`      | `TurnoverCalCleanlinessSensor`|
 | `services.py` (ext.)    | `mark_dirty`/`mark_clean` +   |
 |                         | resolver extension            |
 | `coordinator.py` (ext.) | State machine ownership, RC   |
