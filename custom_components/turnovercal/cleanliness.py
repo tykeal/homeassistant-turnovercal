@@ -398,6 +398,10 @@ class CleanlinessStateMachine:
         if self._state.phase == PHASE_OCCUPIED:
             return
 
+        if not isinstance(checkout_time, datetime) or checkout_time.tzinfo is None:
+            msg = f"checkout_time must be a tz-aware datetime, got {checkout_time!r}"
+            raise ValueError(msg)
+
         # Cancel cleaning timer if being_cleaned (FR-017)
         if self._state.phase == PHASE_BEING_CLEANED and self._timer_unsub is not None:
             self._timer_unsub()

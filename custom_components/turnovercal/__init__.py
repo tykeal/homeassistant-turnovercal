@@ -203,17 +203,18 @@ async def _async_reconcile_active_stay(
     for event in rc_events:
         evt_start = event.start
         evt_end = event.end
-        if (
-            isinstance(evt_start, datetime)
-            and isinstance(evt_end, datetime)
-            and evt_start <= now <= evt_end
-        ):
-            if evt_end.tzinfo is None:
-                _LOGGER.warning(
-                    "Skipping RC event with naive end datetime %s",
-                    evt_end,
-                )
-                continue
+        if not (isinstance(evt_start, datetime) and isinstance(evt_end, datetime)):
+            continue
+
+        if evt_start.tzinfo is None or evt_end.tzinfo is None:
+            _LOGGER.warning(
+                "Skipping RC event with naive datetime start=%s end=%s",
+                evt_start,
+                evt_end,
+            )
+            continue
+
+        if evt_start <= now <= evt_end:
             await state_machine.async_handle_checkin(evt_end)
             return
 
