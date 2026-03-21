@@ -494,17 +494,12 @@ class CleanlinessStateMachine:
         ):
             return
 
-        # Cancel cleaning timer if transitioning from being_cleaned
-        if self._timer_unsub is not None:
-            self._timer_unsub()
-            self._timer_unsub = None
-
         self._state = CleanlinessState(
             is_dirty=True,
             phase=PHASE_AWAITING_CLEANING,
             last_transition_at=now,
             last_transition_reason=REASON_MID_STAY_CANCELLATION,
-            dirty_since=now,
+            dirty_since=self._state.dirty_since or now,
             config_entry_id=self._entry_id,
         )
 

@@ -1646,6 +1646,7 @@ class TestAsyncHandleMidstayCancellation:
 
         assert machine.is_dirty is True
         assert machine.phase == PHASE_AWAITING_CLEANING
+        assert machine.state.dirty_since == persisted.dirty_since
         fallback.assert_awaited_once()
 
     @freeze_time("2026-03-15T14:00:00+00:00")

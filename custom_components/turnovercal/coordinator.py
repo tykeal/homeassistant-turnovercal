@@ -271,9 +271,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             if uid and isinstance(ev_start, datetime) and isinstance(ev_end, datetime):
                 if ev_start.tzinfo is None or ev_end.tzinfo is None:
                     _LOGGER.warning(
-                        "Skipping reservation %s with naive "
-                        "datetime(s): start=%s, end=%s",
-                        uid,
+                        "Skipping reservation with naive datetime(s): start=%s, end=%s",
                         ev_start,
                         ev_end,
                     )
