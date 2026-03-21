@@ -127,9 +127,8 @@ correct on/off states matching the property's cleanliness.
    the integration loads, **Then** a binary sensor entity appears under the
    property's existing device with an entity ID consistent
    with other TurnoverCal entities (for example,
-   `binary_sensor.<property>_cleanliness`, derived from
-   the config entry title and a `cleanliness` translation
-   key).
+   `binary_sensor.<property>_dirty`, derived from the
+   config entry title and a `dirty` translation key).
 2. **Given** a property in the "dirty" state, **When** viewing the binary
    sensor, **Then** the state reads "on" and additional context attributes
    include when the state last changed, the reason for the transition, and the
@@ -417,8 +416,10 @@ restarting the integration, and verifying the binary sensor still reads "on"
 - **FR-031**: The binary sensor MUST include attributes for the last state
   change timestamp, the reason for the transition (e.g., "guest_checkin,"
   "mid_stay_cancellation," "lock_code_entry," "cleaning_duration_elapsed,"
-  "service_call_mark_clean," "service_call_mark_dirty"), and a `phase` attribute
-  indicating the property's lifecycle phase.
+  "service_call_mark_clean," "service_call_mark_dirty"), a `phase` attribute
+  indicating the property's lifecycle phase, `dirty_since` (ISO 8601 or null
+  indicating when the current dirty period started), and `timer_target`
+  (ISO 8601 or null indicating the auto-clean timer deadline).
 - **FR-032**: The `phase` attribute MUST report one of exactly four values:
   `occupied` when a guest is actively staying (between check-in and check-out),
   `awaiting_cleaning` after the guest checks out while the property remains
@@ -441,12 +442,13 @@ restarting the integration, and verifying the binary sensor still reads "on"
   `being_cleaned` phase indicates active cleaning in progress.
 - **FR-034**: The binary sensor entity ID MUST be derived
   using this integration's standard naming convention
-  (config entry title + translation key for the
-  cleanliness binary sensor) rather than a hard-coded
-  `turnovercal_<property_name>_dirty` pattern. The
-  translation key for this sensor MUST be stable so that
-  the resulting entity ID remains predictable for
-  automations.
+  (config entry title + translation key) rather than
+  hard-coded string concatenation. The translation key
+  `"dirty"` MUST be used, producing entity IDs like
+  `binary_sensor.<config_entry_title_slug>_dirty`
+  through HA's standard entity ID derivation. The
+  translation key MUST be stable so that entity IDs
+  remain predictable for automations.
 
 ### Key Entities
 
