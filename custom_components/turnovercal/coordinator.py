@@ -519,7 +519,8 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
 
         Filters by entity ID, unlock state, and code slot number.
         On match, applies the cleaning signal to the active
-        turnover event.
+        turnover event and triggers the cleanliness lock code
+        handler.
 
         Args:
             event: The Keymaster bus event.
@@ -537,3 +538,15 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         adjusted = await self.apply_cleaning_signal(now)
         if adjusted:
             self.async_set_updated_data(self._cache.get_events())
+
+        # Trigger cleanliness state machine transition
+        domain_data = self.hass.data.get(DOMAIN, {})
+        for entry_data in domain_data.values():
+            if not isinstance(entry_data, dict):
+                continue
+            if entry_data.get("coordinator") is not self:
+                continue
+            cleanliness = entry_data.get("cleanliness")
+            if cleanliness is not None:
+                await cleanliness.async_handle_lock_code()
+            break

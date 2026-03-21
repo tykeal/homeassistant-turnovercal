@@ -10,7 +10,7 @@ CleanlinessStateMachine that manages phase lifecycle transitions.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
@@ -24,7 +24,9 @@ from custom_components.turnovercal.const import (
     REASON_CLEANING_DURATION_ELAPSED,
     REASON_GUEST_CHECKIN,
     REASON_GUEST_CHECKOUT,
+    REASON_LOCK_CODE_ENTRY,
     REASON_MID_STAY_CANCELLATION,
+    REASON_SERVICE_CALL_MARK_CLEAN,
     REASON_STARTUP_RECONCILIATION,
 )
 
@@ -514,6 +516,70 @@ class CleanlinessStateMachine:
         self._persist()
         self._fire_callbacks()
         return created_uid
+
+    async def async_handle_lock_code(self) -> None:
+        """Handle a cleaning lock code entry.
+
+        When in ``awaiting_cleaning`` phase, transitions to
+        ``being_cleaned``, starts the cleaning duration timer,
+        and persists the state.  No-op for any other phase.
+        """
+        assert self._state is not None  # noqa: S101
+
+        if self._state.phase != PHASE_AWAITING_CLEANING:
+            return
+
+        now = datetime.now(tz=_UTC)
+        timer_target = now + timedelta(
+            hours=self._cleaning_duration_hours,
+        )
+
+        self._state = CleanlinessState(
+            is_dirty=True,
+            phase=PHASE_BEING_CLEANED,
+            last_transition_at=now,
+            last_transition_reason=REASON_LOCK_CODE_ENTRY,
+            timer_target=timer_target,
+            dirty_since=self._state.dirty_since,
+            associated_checkout_time=(self._state.associated_checkout_time),
+            config_entry_id=self._entry_id,
+        )
+
+        self._timer_unsub = async_track_point_in_time(
+            self._hass,
+            self._async_timer_expired,
+            timer_target,
+        )
+
+        self._persist()
+        self._fire_callbacks()
+
+    async def async_mark_clean(self) -> None:
+        """Mark the property as clean immediately.
+
+        Transitions any dirty phase to clean, cancels an active
+        cleaning timer if present, and persists the state.
+        Silent no-op if already clean.
+        """
+        assert self._state is not None  # noqa: S101
+
+        if not self._state.is_dirty:
+            return
+
+        if self._timer_unsub is not None:
+            self._timer_unsub()
+            self._timer_unsub = None
+
+        now = datetime.now(tz=_UTC)
+        self._state = CleanlinessState(
+            is_dirty=False,
+            phase=PHASE_CLEAN,
+            last_transition_at=now,
+            last_transition_reason=REASON_SERVICE_CALL_MARK_CLEAN,
+            config_entry_id=self._entry_id,
+        )
+        self._persist()
+        self._fire_callbacks()
 
     async def _validate_cleaning_coverage(
         self,
