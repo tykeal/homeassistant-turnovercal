@@ -462,7 +462,7 @@ class TurnoverCalOptionsFlow(OptionsFlow):
                 NumberSelectorConfig(
                     min=MIN_CLEANING_DURATION_HOURS,
                     max=24,
-                    step=0.5,
+                    step=0.05,
                     mode=NumberSelectorMode.BOX,
                 ),
             ),
