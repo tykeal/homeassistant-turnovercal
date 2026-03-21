@@ -264,24 +264,35 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
 
         """
         current_active: dict[str, tuple[datetime, datetime]] = {}
+        present_uids: set[str] = set()
         for ev in rc_events:
             uid = getattr(ev, "uid", None)
             ev_start = ev.start
             ev_end = ev.end
-            if uid and isinstance(ev_start, datetime) and isinstance(ev_end, datetime):
-                if ev_start.tzinfo is None or ev_end.tzinfo is None:
-                    _LOGGER.warning(
-                        "Skipping reservation with naive datetime(s): start=%s, end=%s",
-                        ev_start,
-                        ev_end,
-                    )
-                    continue
-                if ev_start <= now <= ev_end:
-                    current_active[uid] = (ev_start, ev_end)
+            if (
+                not uid
+                or not isinstance(ev_start, datetime)
+                or not isinstance(ev_end, datetime)
+            ):
+                continue
+            present_uids.add(uid)
+            if ev_start.tzinfo is None or ev_end.tzinfo is None:
+                _LOGGER.warning(
+                    "Skipping reservation with naive datetime(s): start=%s, end=%s",
+                    ev_start,
+                    ev_end,
+                )
+                continue
+            if ev_start <= now <= ev_end:
+                current_active[uid] = (ev_start, ev_end)
 
         if self._previous_active_stays:
             for uid, (start, end) in self._previous_active_stays.items():
-                if uid not in current_active and start <= now < end:
+                if (
+                    uid not in current_active
+                    and uid not in present_uids
+                    and start <= now < end
+                ):
                     await self._async_fire_midstay_cancellation(
                         start,
                     )
