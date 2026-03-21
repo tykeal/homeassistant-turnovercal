@@ -1356,6 +1356,67 @@ class TestMidstayCancellationDetection:
 
         assert fallback.created_from_midstay_cancellation is True
 
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_naive_datetime_event_skipped_from_active(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """RC event with naive datetimes does not enter active tracking."""
+        naive_ev = MagicMock()
+        naive_ev.start = datetime(2026, 3, 14, 10, 0)  # noqa: DTZ001
+        naive_ev.end = datetime(2026, 3, 16, 10, 0)  # noqa: DTZ001
+        naive_ev.uid = "rc-naive-001"
+
+        cache = _make_cache_mock()
+        coordinator = _make_coordinator_with_entry(
+            hass,
+            cache,
+            rc_events=[],
+        )
+
+        mock_cleanliness = AsyncMock()
+        mock_cleanliness.async_handle_midstay_cancellation = AsyncMock()
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["test_entry_123"] = {
+            "cleanliness": mock_cleanliness,
+        }
+
+        # First poll with aware event to establish tracking
+        aware_ev = CalendarEvent(
+            start=datetime(2026, 3, 14, 10, 0, tzinfo=ET),
+            end=datetime(2026, 3, 16, 10, 0, tzinfo=ET),
+            summary="Aware Guest",
+            uid="rc-naive-001",
+        )
+        with (
+            patch.object(
+                coordinator._calendar_entity,  # noqa: SLF001
+                "async_get_events",
+                new=AsyncMock(return_value=[aware_ev]),
+            ),
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                return_value=[],
+            ),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        # Second poll: same UID returns with naive datetimes
+        with (
+            patch.object(
+                coordinator._calendar_entity,  # noqa: SLF001
+                "async_get_events",
+                new=AsyncMock(return_value=[naive_ev]),
+            ),
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                return_value=[],
+            ),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        mock_cleanliness.async_handle_midstay_cancellation.assert_not_awaited()
+
 
 # ---------------------------------------------------------------------------
 # T044: Tests for preserving mid-stay cancellation events in merge
