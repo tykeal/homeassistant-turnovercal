@@ -148,15 +148,17 @@ Where `<property_name>` is the slugified property name from configuration.
 
 ### Extra State Attributes
 
-| Attribute            | Type     | Description                  |
-| -------------------- | -------- | ---------------------------- |
-| `phase`              | string   | `clean`, `occupied`,         |
-|                      |          | `awaiting_cleaning`, or      |
-|                      |          | `being_cleaned`              |
-| `last_changed_at`    | ISO 8601 | When state last changed      |
-| `last_changed_reason`| string   | Reason for last transition   |
-| `dirty_since`        | ISO 8601 | Dirty period start (or null) |
-| `timer_target`       | ISO 8601 | Auto-clean time (or null)    |
+| Attribute                | Type     | Description                 |
+| ------------------------ | -------- | --------------------------- |
+| `phase`                  | string   | `clean`, `occupied`,        |
+|                          |          | `awaiting_cleaning`, or     |
+|                          |          | `being_cleaned`             |
+| `last_transition_at`     | ISO 8601 | When last transition        |
+|                          |          | occurred                    |
+| `last_transition_reason` | string   | Reason for last transition  |
+| `dirty_since`            | ISO 8601 | Dirty period start (or      |
+|                          |          | null)                       |
+| `timer_target`           | ISO 8601 | Auto-clean time (or null)   |
 
 ### State Change Events
 

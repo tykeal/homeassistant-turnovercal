@@ -122,7 +122,7 @@ specs/002-cleanliness-state-tracking/
 ```text
 custom_components/turnovercal/
 ├── __init__.py         # MODIFIED: +BINARY_SENSOR, +store, +RC
-├── binary_sensor.py         # NEW: CleanlinessBinarySensor entity
+├── binary_sensor.py         # NEW: TurnoverCalCleanlinessSensor entity
 ├── calendar.py              # UNCHANGED
 ├── cleanliness.py           # NEW: CleanlinessPhase, CleanlinessState, CleanlinessStateMachine
 ├── cleanliness_store.py     # NEW: CleanlinessStateStore (HA Store wrapper)
@@ -143,7 +143,7 @@ custom_components/turnovercal/
 
 tests/
 ├── conftest.py              # MODIFIED: +cleanliness fixtures, +mock state machine
-├── test_binary_sensor.py    # NEW: Binary sensor entity tests
+├── test_cleanliness_sensor.py # NEW: Binary sensor entity tests
 ├── test_cleanliness.py      # NEW: State machine unit tests
 ├── test_cleanliness_store.py # NEW: Store persistence tests
 ├── test_config_flow.py      # MODIFIED: +cleaning_duration_hours tests

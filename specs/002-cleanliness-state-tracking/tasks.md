@@ -48,20 +48,26 @@ stories. No behavioral logic yet — just the scaffolding.
       `REASON_SERVICE_CALL_MARK_DIRTY`, `REASON_STARTUP_RECONCILIATION`), and
       `CLEANLINESS_STORE_VERSION` (1)
 - [ ] T002 Create `CleanlinessState` dataclass in
-      `custom_components/turnovercal/models.py` — fields: `is_dirty` (bool),
-      `phase` (str, one of the four phase constants), `last_changed` (datetime,
-      UTC), `reason` (str), `timer_target` (datetime | None, UTC, for
-      `being_cleaned` timer reconstitution), `config_entry_id` (str). Include
-      `to_dict()` and `from_dict()` serialization matching the existing
-      `TurnoverEvent` pattern (naive local for display times, UTC with offset
-      for timestamps)
+      `custom_components/turnovercal/cleanliness.py` — fields: `is_dirty`
+      (bool), `phase` (str, one of the four phase constants),
+      `last_transition_at` (datetime, UTC), `last_transition_reason` (str),
+      `timer_target` (datetime | None, UTC, for `being_cleaned` timer
+      reconstitution), `dirty_since` (datetime | None, UTC, start of dirty
+      period), `associated_checkout_time` (datetime | None, UTC, for
+      fallback), `config_entry_id` (str). Include `to_dict()` and
+      `from_dict()` serialization matching the existing `TurnoverEvent`
+      pattern (naive local for display times, UTC with offset for
+      timestamps)
 - [ ] T003 Create `CleanlinessStateStore` in
       `custom_components/turnovercal/cleanliness_store.py` — dedicated
       `homeassistant.helpers.storage.Store` (storage key:
-      `turnovercal_cleanliness_{entry_id}`, version from
+      `turnovercal_{entry_id}_cleanliness`, version from
       `CLEANLINESS_STORE_VERSION`). Methods:
       `async_load() -> CleanlinessState | None`,
-      `async_save(state: CleanlinessState)`, `async_delete()`. Follow the
+      `async_save(state: CleanlinessState)`,
+      `schedule_save(state: CleanlinessState)` (batched
+      5-second delay for performance), `async_delete()`.
+      Follow the
       `EventCache` persistence pattern but simpler (single object,
       not a dict of events). Returns `None` when no persisted
       state exists (state machine handles default creation)
@@ -84,7 +90,8 @@ lifecycle.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Unit tests for `CleanlinessState` dataclass in `tests/test_models.py`
+- [ ] T005 Unit tests for `CleanlinessState` dataclass in
+      `tests/test_cleanliness.py`
       — test `to_dict()`/`from_dict()` round-trip for all fields, default clean
       state factory, phase value validation
 - [ ] T006 [P] Unit tests for `CleanlinessStateStore` in
@@ -142,9 +149,11 @@ newly configured property.
 
 - [ ] T012 [P] [US3] Unit tests for `TurnoverCalCleanlinessSensor` in
       `tests/test_cleanliness_sensor.py` — test entity creation with correct
-      unique_id (`{entry_id}_cleanliness`), device class `problem`, translation
-      key `cleanliness`, reports `on` when dirty and `off` when clean, exposes
-      extra state attributes: `phase`, `last_changed`, `reason`. Test the sensor
+      unique_id (`{entry_id}_cleanliness`), device class
+      `problem`, translation key `dirty`, reports `on`
+      when dirty and `off` when clean, exposes extra state
+      attributes: `phase`, `last_transition_at`,
+      `last_transition_reason`. Test the sensor
       updates when state machine state changes. Test that the entity belongs to
       the same device as existing calendar/sensor entities (device identifiers
       `(DOMAIN, entry_id)`)
@@ -153,20 +162,26 @@ newly configured property.
 
 - [ ] T013 [US3] Create `TurnoverCalCleanlinessSensor` binary sensor entity in
       `custom_components/turnovercal/binary_sensor.py` — extend
-      `BinarySensorEntity`, use `device_class=BinarySensorDeviceClass.PROBLEM`,
-      `translation_key="cleanliness"`. Unique ID: `{entry_id}_cleanliness`.
-      Device info matches existing entities with identifiers
-      `(DOMAIN, entry_id)`. The `is_on` property reads from the
+      `RestoreEntity, BinarySensorEntity`, use
+      `device_class=BinarySensorDeviceClass.PROBLEM`,
+      `translation_key="dirty"`. Unique ID:
+      `{entry_id}_cleanliness`. Device info matches existing
+      entities with identifiers `(DOMAIN, entry_id)`. The
+      `is_on` property reads from the
       `CleanlinessStateMachine` (retrieved from
       `hass.data[DOMAIN][entry.entry_id]["cleanliness"]`).
-      Extra state attributes:
-      `phase` (from state machine), `last_changed` (ISO string of last
-      transition), `reason` (transition reason string). Implement
-      `async_setup_entry()` platform function
+      Implement `async_get_last_extra_data()` restore
+      behavior to load state from RestoreEntity on startup
+      as a fast-path before the store loads. Extra state
+      attributes: `phase` (from state machine),
+      `last_transition_at` (ISO string of last transition),
+      `last_transition_reason` (transition reason string).
+      Implement `async_setup_entry()` platform function
 - [ ] T014 [US3] Add binary sensor translation keys to
       `custom_components/turnovercal/strings.json` — add
-      `entity.binary_sensor.cleanliness.name` = "Cleanliness" under the entity
-      section. Add phase attribute translation if needed.
+      `entity.binary_sensor.dirty.name` = "Cleanliness"
+      under the entity section. Add phase attribute
+      translation if needed.
       Keep `translations/en.json` in sync
 - [ ] T015 [US3] Register callback in binary sensor to update on state machine
       changes in `custom_components/turnovercal/binary_sensor.py` — the state
@@ -248,7 +263,8 @@ trigger a check-in event, verify the binary sensor shows "on" (dirty) with
 - [ ] T020 [P] [US1] Unit tests for check-in transition in
       `tests/test_cleanliness.py` — test `async_handle_checkin(checkout_time)`:
       clean→dirty with `phase=occupied`, `reason=REASON_GUEST_CHECKIN`,
-      `last_changed` updated, `is_dirty=True`. Test idempotency: calling checkin
+      `last_transition_at` updated, `is_dirty=True`. Test
+      idempotency: calling checkin
       when already dirty/occupied is a no-op. Test checkin during
       `being_cleaned` phase cancels timer, stays dirty, phase→occupied
 - [ ] T021 [P] [US1] Unit tests for check-out transition in
@@ -347,13 +363,14 @@ to clean). Alternatively, call `mark_clean` to verify immediate transition.
       `reason=REASON_SERVICE_CALL_MARK_CLEAN`. Test: mark_clean when already
       clean is a silent no-op. Test: mark_clean during `being_cleaned` cancels
       timer (FR-015)
-- [ ] T032 [P] [US2] Unit tests for `mark_clean` and `mark_dirty` service
-      handlers in `tests/test_services.py` — test service registration for
-      `turnovercal.mark_clean` and `turnovercal.mark_dirty`. Test target
-      resolution (entity_id or config_entry_id, same pattern as existing
+- [ ] T032 [P] [US2] Unit tests for `mark_clean` service handler
+      in `tests/test_services.py` — test service registration
+      for `turnovercal.mark_clean`. Test target resolution
+      (entity_id or config_entry_id, same pattern as existing
       `mark_cleaning_started`). Test `mark_clean` calls
-      `cleanliness.async_mark_clean()`. Test `mark_dirty` calls
-      `cleanliness.async_mark_dirty()`
+      `cleanliness.async_mark_clean()`. (Note: `mark_dirty`
+      service registration and handler tests are deferred to
+      Phase 8 alongside T046/T047)
 
 ### Implementation for User Story 2
 
@@ -388,17 +405,21 @@ to clean). Alternatively, call `mark_clean` to verify immediate transition.
       from `hass.data[DOMAIN][entry.entry_id]["cleanliness"]`).
       This connects the existing Keymaster integration with the
       new cleanliness tracking
-- [ ] T037 [US2] Register `mark_clean` and `mark_dirty` service actions in
+- [ ] T037 [US2] Register `mark_clean` service action in
       `custom_components/turnovercal/services.py` — add
       `SERVICE_MARK_CLEAN = "mark_clean"` and
-      `SERVICE_MARK_DIRTY = "mark_dirty"` constants. Create handlers
-      `_handle_mark_clean` and `_handle_mark_dirty` that resolve target
-      coordinators (reuse `_resolve_coordinators` pattern), then call the
-      appropriate cleanliness state machine method. Update
-      `async_setup_services()` and `async_unload_services()` to
-      register/unregister both new services. Accept targeting by entity
-      (binary_sensor OR calendar) or config_entry_id (FR-022) — update
-      `_find_coordinator_by_entity` to also check binary_sensor domain entities
+      `SERVICE_MARK_DIRTY = "mark_dirty"` constants. Create
+      handler `_handle_mark_clean` that resolves target
+      coordinators (reuse `_resolve_coordinators` pattern),
+      then calls `cleanliness.async_mark_clean()`. Update
+      `async_setup_services()` and `async_unload_services()`
+      to register/unregister `mark_clean`. Accept targeting
+      by entity (binary_sensor OR calendar) or
+      config_entry_id (FR-022) — update
+      `_find_coordinator_by_entity` to also check
+      binary_sensor domain entities. (Note: `mark_dirty`
+      service registration is deferred to T047 in Phase 8,
+      after `async_mark_dirty()` is implemented in T046)
 - [ ] T038 [US2] Add service YAML definitions for `mark_clean` and `mark_dirty`
       in `custom_components/turnovercal/services.yaml` — define both services
       with `target.entity` supporting both `calendar` and `binary_sensor`
@@ -512,14 +533,20 @@ calendar.
       `phase=PHASE_AWAITING_CLEANING`, `reason=REASON_SERVICE_CALL_MARK_DIRTY`,
       validate cleaning coverage (FR-016). If already dirty and cleaning event
       exists, no-op on event creation. Persist and notify callbacks
-- [ ] T047 [US5] Wire `mark_dirty` service handler in
-      `custom_components/turnovercal/services.py` — the handler (registered in
-      T037) calls `cleanliness.async_mark_dirty()`. Ensure it resolves the state
-      machine from
+- [ ] T047 [US5] Register `mark_dirty` service action and wire
+      handler in `custom_components/turnovercal/services.py`
+      — create handler `_handle_mark_dirty` that resolves the
+      state machine from
       `hass.data[DOMAIN][entry.entry_id]["cleanliness"]`
-      and handles the
-      immediate cleaning event creation through the state machine's coordinator
-      delegate
+      and calls `cleanliness.async_mark_dirty()`. Register
+      the `mark_dirty` service in `async_setup_services()`
+      and unregister in `async_unload_services()` (using
+      the `SERVICE_MARK_DIRTY` constant defined in T037).
+      Also add unit tests for `mark_dirty` service handler
+      in `tests/test_services.py` — test registration, target
+      resolution, and that it calls `async_mark_dirty()`.
+      Handles the immediate cleaning event creation through
+      the state machine's coordinator delegate
 
 **Checkpoint**: Property managers can force-dirty any property, and immediate
 cleaning events appear on the calendar.
@@ -557,7 +584,11 @@ cleaning events appear on the calendar.
       changes, services changes)
 - [ ] T053 Run linting and type checking — execute `ruff check`,
       `ruff format --check`, and `mypy` against the codebase per project
-      constitution requirements. Fix any issues
+      constitution requirements. Fix any issues. Also verify
+      that state transition latency meets SC-003 and SC-004
+      bounds (transitions within 5 seconds of trigger) by
+      asserting timing in the relevant transition test tasks
+      (T020, T029, T030)
 
 ---
 
@@ -691,7 +722,6 @@ Task T039: "Add translation keys"
 | File | Changes |
 | ------ | --------- |
 | `const.py` | New constants (phases, reasons, config key) |
-| `models.py` | `CleanlinessState` dataclass |
 | `__init__.py` | Platform, state machine, events, reconciliation |
 | `config_flow.py` | `cleaning_duration_hours` options field |
 | `coordinator.py` | Lock event → cleanliness wiring, reservation comparison |
@@ -701,7 +731,6 @@ Task T039: "Add translation keys"
 | `tests/test_config_flow.py` | Tests for cleaning_duration_hours option |
 | `tests/test_services.py` | Tests for new service handlers |
 | `tests/test_coordinator.py` | Tests for reservation comparison logic |
-| `tests/test_models.py` | Tests for CleanlinessState dataclass |
 
 ---
 

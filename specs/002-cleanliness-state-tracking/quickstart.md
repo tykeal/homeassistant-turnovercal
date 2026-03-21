@@ -35,7 +35,8 @@ uv run mypy custom_components/turnovercal/
 |                        | `CleanlinessStateMachine`        |
 | `cleanliness_store.py` | HA Store wrapper for persisting  |
 |                        | cleanliness state                |
-| `binary_sensor.py`     | `CleanlinessBinarySensor` entity |
+| `binary_sensor.py`     | `TurnoverCalCleanlinessSensor`   |
+|                        | entity                           |
 
 ### Modified Modules
 
@@ -68,8 +69,8 @@ mark_dirty/clean ──► Services ──► Coord ───►  │
                                        │   CleanlinessStateStore
                                        │   (persistence)
                                        ▼
-                                 CleanlinessBinarySensor
-                                 (entity update callback)
+                              TurnoverCalCleanlinessSensor
+                              (entity update callback)
 ```
 
 ### Phase Lifecycle
@@ -104,8 +105,8 @@ All tests follow Red-Green-Refactor per the constitution:
 1. **State machine unit tests** (`test_cleanliness.py`): Test all
    transitions, guards, edge cases in isolation.
 2. **Store tests** (`test_cleanliness_store.py`): Persistence round-trips.
-3. **Binary sensor tests** (`test_binary_sensor.py`): State mapping,
-   attributes, RestoreEntity behavior.
+3. **Binary sensor tests** (`test_cleanliness_sensor.py`):
+   State mapping, attributes, RestoreEntity behavior.
 4. **Service tests** (`test_services.py` extended): mark_dirty/mark_clean
    targeting and behavior.
 5. **Coordinator integration** (`test_coordinator.py` extended): Mid-stay
@@ -120,13 +121,17 @@ All tests follow Red-Green-Refactor per the constitution:
 uv run pytest tests/test_cleanliness.py -v
 
 # Binary sensor tests
-uv run pytest tests/test_binary_sensor.py -v
+uv run pytest tests/test_cleanliness_sensor.py -v
 
 # All tests with coverage
 uv run pytest tests/ --cov=custom_components.turnovercal --cov-report=term-missing
 ```
 
 ## Implementation Phases
+
+> **Note**: These phases are a simplified summary. See
+> `tasks.md` for the authoritative, detailed phase
+> breakdown (9 phases with per-task granularity).
 
 ### Phase 1: Core State Machine + Persistence
 
@@ -136,7 +141,7 @@ uv run pytest tests/ --cov=custom_components.turnovercal --cov-report=term-missi
 
 ### Phase 2: Binary Sensor Entity
 
-- `CleanlinessBinarySensor` with RestoreEntity
+- `TurnoverCalCleanlinessSensor` with RestoreEntity
 - Device registration under existing device
 - Entity attributes (phase, timestamps, reason)
 

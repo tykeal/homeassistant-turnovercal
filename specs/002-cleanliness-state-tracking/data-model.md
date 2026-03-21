@@ -107,6 +107,8 @@ Schema:
 - `async_save(state: CleanlinessState) → None`: Persist state immediately.
 - `schedule_save(state: CleanlinessState) → None`: Batch-persist with
   5-second delay (consistent with EventCache pattern).
+- `async_delete() → None`: Remove persisted state (for
+  integration unload cleanup).
 
 ## State Transitions
 
@@ -219,11 +221,11 @@ ConfigEntry (1) ──── (1) TurnoverCoordinator
      │                         │                    ├── CleanlinessStateStore
      │                         │                    └── timer management
      │                         │
-     │                         └── notifies ── (1) CleanlinessBinarySensor
+     │                         └── notifies ── (1) TurnoverCalCleanlinessSensor
      │
      ├── (1) TurnoverCalCalendarEntity (CoordinatorEntity)
      ├── (1) TurnoverCalFeedUrlSensor
-     └── (1) CleanlinessBinarySensor (RestoreEntity + BinarySensorEntity)
+     └── (1) TurnoverCalCleanlinessSensor (RestoreEntity + BinarySensorEntity)
 ```
 
 ## New Module Breakdown
@@ -234,7 +236,8 @@ ConfigEntry (1) ──── (1) TurnoverCoordinator
 |                         | `CleanlinessState` dataclass, |
 |                         | `CleanlinessStateMachine`     |
 | `cleanliness_store.py`  | HA Store wrapper              |
-| `binary_sensor.py`      | `CleanlinessBinarySensor`     |
+| `binary_sensor.py`      | `TurnoverCalCleanliness-`     |
+|                         | `Sensor`                      |
 | `services.py` (ext.)    | `mark_dirty`/`mark_clean` +   |
 |                         | resolver extension            |
 | `coordinator.py` (ext.) | State machine ownership, RC   |

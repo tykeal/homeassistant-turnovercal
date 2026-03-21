@@ -127,9 +127,8 @@ correct on/off states matching the property's cleanliness.
    the integration loads, **Then** a binary sensor entity appears under the
    property's existing device with an entity ID consistent
    with other TurnoverCal entities (for example,
-   `binary_sensor.<property>_cleanliness`, derived from
-   the config entry title and a `cleanliness` translation
-   key).
+   `binary_sensor.<property>_dirty`, derived from the
+   config entry title and a `dirty` translation key).
 2. **Given** a property in the "dirty" state, **When** viewing the binary
    sensor, **Then** the state reads "on" and additional context attributes
    include when the state last changed, the reason for the transition, and the
@@ -441,12 +440,13 @@ restarting the integration, and verifying the binary sensor still reads "on"
   `being_cleaned` phase indicates active cleaning in progress.
 - **FR-034**: The binary sensor entity ID MUST be derived
   using this integration's standard naming convention
-  (config entry title + translation key for the
-  cleanliness binary sensor) rather than a hard-coded
-  `turnovercal_<property_name>_dirty` pattern. The
-  translation key for this sensor MUST be stable so that
-  the resulting entity ID remains predictable for
-  automations.
+  (config entry title + translation key) rather than
+  hard-coded string concatenation. The translation key
+  `"dirty"` MUST be used, producing entity IDs like
+  `binary_sensor.turnovercal_<property_name>_dirty`
+  through HA's standard entity ID derivation. The
+  translation key MUST be stable so that entity IDs
+  remain predictable for automations.
 
 ### Key Entities
 
