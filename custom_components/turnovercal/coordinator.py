@@ -297,6 +297,15 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
                         start,
                     )
 
+        # Retain tracking for UIDs present but with naive datetimes
+        for uid in present_uids:
+            if (
+                uid not in current_active
+                and self._previous_active_stays
+                and uid in self._previous_active_stays
+            ):
+                current_active[uid] = self._previous_active_stays[uid]
+
         self._previous_active_stays = current_active
 
     async def _async_fire_midstay_cancellation(

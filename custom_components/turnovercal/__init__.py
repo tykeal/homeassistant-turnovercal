@@ -257,7 +257,7 @@ def _build_coverage_delegates(  # noqa: PLR0913
         return False
 
     async def _create(checkout_time: datetime) -> str:
-        """Create a fallback turnover event for the checkout."""
+        """Create a fallback turnover event and return its UID."""
         tz = ZoneInfo(tz_str)
         local_checkout = checkout_time.astimezone(tz)
         uid = f"{secrets.token_hex(8)}@turnovercal.homeassistant"
