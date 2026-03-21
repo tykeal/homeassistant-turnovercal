@@ -36,6 +36,8 @@ DEFAULT_CLEANING_CODE_SLOT_MAX = 1024
 
 # Events
 EVENT_KEYMASTER = "keymaster_lock_state_changed"
+EVENT_RC_CHECKIN = "rental_control_check_in"
+EVENT_RC_CHECKOUT = "rental_control_check_out"
 
 # Feed URL pattern (shared between HTTP view and sensor)
 FEED_URL_PATH = "/api/turnovercal/{token}/calendar.ics"

@@ -116,6 +116,11 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         return self._calendar_entity.entity_id
 
     @property
+    def calendar_entity(self) -> _CalendarEntityProtocol:
+        """Return the monitored calendar entity."""
+        return self._calendar_entity
+
+    @property
     def cache_events(self) -> dict[str, TurnoverEvent]:
         """Return current cached events."""
         return self._cache.get_events()
