@@ -1,0 +1,168 @@
+<!--
+SPDX-FileCopyrightText: 2026 Andrew Grimberg <tykeal@bardicgrove.org>
+SPDX-License-Identifier: Apache-2.0
+-->
+
+# Implementation Plan: Property Cleanliness State Tracking
+
+**Branch**: `002-cleanliness-state-tracking` |
+**Date**: 2025-07-18 | **Spec**: [spec.md](spec.md)
+**Input**: Feature specification from `/specs/002-cleanliness-state-tracking/spec.md`
+
+## Summary
+
+Add a per-property cleanliness state machine that tracks whether a vacation
+rental property is dirty or clean through a 4-phase lifecycle:
+`clean` → `occupied` → `awaiting_cleaning` → `being_cleaned` → `clean`. The
+state is exposed as a binary sensor entity (PROBLEM device class), persisted
+across HA restarts via a dedicated HA Store, and driven by RC (Rental Control) check-in/check-out
+events, Keymaster lock code entries, and manual service actions
+(`turnovercal.mark_dirty`, `turnovercal.mark_clean`). A configurable cleaning
+duration timer auto-transitions from `being_cleaned` to `clean` after the
+cleaner's lock code entry.
+
+## Technical Context
+
+**Language/Version**: Python >=3.13.2 (per pyproject.toml `requires-python`)
+**Primary Dependencies**: homeassistant >=2026.2.0, icalendar >=6.1.0,
+rental_control (HA integration dependency), keymaster (optional lock monitoring)
+**Storage**: HA Store (local JSON) — existing EventCache + new CleanlinessStateStore
+**Testing**: pytest >=8.0 with pytest-homeassistant-custom-component, pytest-asyncio,
+freezegun, pytest-cov; asyncio_mode = auto
+**Target Platform**: Home Assistant custom component (HACS)
+**Project Type**: Home Assistant integration (custom component)
+**Performance Goals**: State transitions within 5 seconds of trigger (SC-003, SC-004);
+no measurable overhead on HA event loop (Constitution IV)
+**Constraints**: Async-only (no blocking calls on HA event loop), cyclomatic complexity
+<=10 per function (ruff C901), 100% docstring coverage (interrogate), strict mypy
+**Scale/Scope**: One binary sensor per config entry (one per
+property); typically 1-10 properties per HA instance
+
+## Constitution Check
+
+*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+
+### Pre-Research Check (Phase 0 Gate)
+
+| Principle              | Status |
+| ---------------------- | ------ |
+| I. Code Quality        | PASS   |
+| II. TDD                | PASS   |
+| III. UX Consistency    | PASS   |
+| IV. Performance        | PASS   |
+| V. Atomic Commits      | PASS   |
+| VI. Phased Development | PASS   |
+
+**Notes**:
+
+- **I**: All new modules will have type annotations,
+  docstrings, SPDX headers. Ruff + mypy + interrogate
+  enforced.
+- **II**: Each phase begins with failing tests.
+  Red-Green-Refactor cycle strictly followed.
+- **III**: Binary sensor follows HA conventions (PROBLEM
+  device class). Services follow existing
+  mark_cleaning_started pattern. Config uses sensible
+  defaults (3h cleaning duration).
+- **IV**: State transitions are O(1) in-memory operations.
+  Timer uses async_track_point_in_time (no polling). Event
+  bus listeners are filtered early. No blocking I/O.
+- **V**: Each phase produces independently committable
+  increments. SPDX + DCO sign-off required.
+- **VI**: Six phases defined, each independently testable.
+  Phase boundaries documented below.
+
+### Post-Design Check (Phase 1 Gate)
+
+| Principle              | Status |
+| ---------------------- | ------ |
+| I. Code Quality        | PASS   |
+| II. TDD                | PASS   |
+| III. UX Consistency    | PASS   |
+| IV. Performance        | PASS   |
+| V. Atomic Commits      | PASS   |
+| VI. Phased Development | PASS   |
+
+**Notes**:
+
+- **I**: State machine in `cleanliness.py` keeps each
+  method focused (low complexity). Enum-based phases
+  prevent invalid strings.
+- **II**: State machine is fully unit-testable in isolation.
+  Binary sensor testable with mocked state machine.
+- **III**: Entity ID pattern
+  `binary_sensor.turnovercal_<property>_dirty` consistent
+  with existing entities. Service targeting matches
+  existing pattern.
+- **IV**: CleanlinessStateStore uses schedule_save (batched
+  5s delay). State machine transitions are synchronous. No
+  event loop blocking.
+- **V**: New files get SPDX headers. Module boundaries
+  enable atomic commits per component.
+- **VI**: Phase 1 (state machine) has zero dependencies on
+  later phases. Each phase adds one testable capability.
+
+## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/002-cleanliness-state-tracking/
+├── plan.md              # This file
+├── research.md          # Phase 0: Research decisions (R-001 through R-009)
+├── data-model.md        # Phase 1: Entity definitions, state transitions, relationships
+├── quickstart.md        # Phase 1: Developer setup and architecture guide
+├── contracts/
+│   └── services.md      # Phase 1: Service action contracts, binary sensor contract
+└── tasks.md             # Phase 2 output (generated by /speckit.tasks)
+```
+
+### Source Code (repository root)
+
+```text
+custom_components/turnovercal/
+├── __init__.py         # MODIFIED: +BINARY_SENSOR, +store, +RC
+├── binary_sensor.py         # NEW: CleanlinessBinarySensor entity
+├── calendar.py              # UNCHANGED
+├── cleanliness.py           # NEW: CleanlinessPhase, CleanlinessState, CleanlinessStateMachine
+├── cleanliness_store.py     # NEW: CleanlinessStateStore (HA Store wrapper)
+├── config_flow.py           # MODIFIED: +cleaning_duration_hours option
+├── const.py            # MODIFIED: +phase/default/config constants
+├── coordinator.py      # MODIFIED: +state machine, +mid-stay, +events
+├── event_cache.py           # UNCHANGED
+├── http_view.py             # UNCHANGED
+├── ical.py                  # UNCHANGED
+├── models.py                # UNCHANGED (CleanlinessState lives in cleanliness.py)
+├── sensor.py                # UNCHANGED
+├── services.py              # MODIFIED: +mark_dirty, +mark_clean, +resolver extension
+├── services.yaml            # MODIFIED: +mark_dirty, +mark_clean definitions
+├── strings.json             # MODIFIED: +binary_sensor strings, +new service strings
+├── token.py                 # UNCHANGED
+├── translations/en.json     # MODIFIED: matching translations
+└── turnover.py              # UNCHANGED
+
+tests/
+├── conftest.py              # MODIFIED: +cleanliness fixtures, +mock state machine
+├── test_binary_sensor.py    # NEW: Binary sensor entity tests
+├── test_cleanliness.py      # NEW: State machine unit tests
+├── test_cleanliness_store.py # NEW: Store persistence tests
+├── test_config_flow.py      # MODIFIED: +cleaning_duration_hours tests
+├── test_coordinator.py # MODIFIED: +mid-stay, +event gen, +timer
+├── test_services.py         # MODIFIED: +mark_dirty, +mark_clean tests
+└── [existing test files unchanged]
+```
+
+**Structure Decision**: Home Assistant custom component — flat module structure
+under `custom_components/turnovercal/` with tests at repository root `tests/`.
+This is the existing structure; no changes to project layout. New functionality
+is added as new modules (`cleanliness.py`, `cleanliness_store.py`,
+`binary_sensor.py`) and extensions to existing modules.
+
+## Complexity Tracking
+
+No constitution violations requiring justification. All design decisions
+stay within complexity limits:
+
+- State machine class has ~8 transition methods, each simple (<=10 CC)
+- No new external dependencies
+- No new architectural patterns beyond existing conventions
