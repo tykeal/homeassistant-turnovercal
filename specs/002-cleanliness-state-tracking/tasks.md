@@ -153,7 +153,8 @@ newly configured property.
       `problem`, translation key `dirty`, reports `on`
       when dirty and `off` when clean, exposes extra state
       attributes: `phase`, `last_transition_at`,
-      `last_transition_reason`. Test the sensor
+      `last_transition_reason`, `dirty_since`,
+      `timer_target`. Test the sensor
       updates when state machine state changes. Test that the entity belongs to
       the same device as existing calendar/sensor entities (device identifiers
       `(DOMAIN, entry_id)`)
@@ -180,7 +181,9 @@ newly configured property.
       data must be persisted. Extra state attributes:
       `phase` (from state machine),
       `last_transition_at` (ISO string of last transition),
-      `last_transition_reason` (transition reason string).
+      `last_transition_reason` (transition reason string),
+      `dirty_since` (ISO string or null),
+      `timer_target` (ISO string or null).
       Implement `async_setup_entry()` platform function
 - [ ] T014 [US3] Add binary sensor translation keys to
       `custom_components/turnovercal/strings.json` — add

@@ -130,10 +130,11 @@ target:
 ### Entity ID Pattern
 
 ```text
-binary_sensor.turnovercal_<property_name>_dirty
+binary_sensor.<config_entry_title_slug>_dirty
 ```
 
-Where `<property_name>` is the slugified property name from configuration.
+Where `<config_entry_title_slug>` is derived by HA from the config entry
+title and translation key (e.g., `binary_sensor.beach_house_dirty`).
 
 ### Device Class
 
@@ -165,8 +166,8 @@ Where `<property_name>` is the slugified property name from configuration.
 The binary sensor fires standard HA `state_changed` events. Automations
 can trigger on:
 
-- `binary_sensor.turnovercal_<property>_dirty` → `on` (property became dirty)
-- `binary_sensor.turnovercal_<property>_dirty` → `off` (property became clean)
+- `binary_sensor.<config_entry_title_slug>_dirty` → `on` (property became dirty)
+- `binary_sensor.<config_entry_title_slug>_dirty` → `off` (property became clean)
 - Attribute change on `phase` (e.g., `awaiting_cleaning` → `being_cleaned`)
 
 ---

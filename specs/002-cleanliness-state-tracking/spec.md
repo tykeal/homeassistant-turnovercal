@@ -416,8 +416,10 @@ restarting the integration, and verifying the binary sensor still reads "on"
 - **FR-031**: The binary sensor MUST include attributes for the last state
   change timestamp, the reason for the transition (e.g., "guest_checkin,"
   "mid_stay_cancellation," "lock_code_entry," "cleaning_duration_elapsed,"
-  "service_call_mark_clean," "service_call_mark_dirty"), and a `phase` attribute
-  indicating the property's lifecycle phase.
+  "service_call_mark_clean," "service_call_mark_dirty"), a `phase` attribute
+  indicating the property's lifecycle phase, `dirty_since` (ISO 8601 or null
+  indicating when the current dirty period started), and `timer_target`
+  (ISO 8601 or null indicating the auto-clean timer deadline).
 - **FR-032**: The `phase` attribute MUST report one of exactly four values:
   `occupied` when a guest is actively staying (between check-in and check-out),
   `awaiting_cleaning` after the guest checks out while the property remains
