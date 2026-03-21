@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 SERVICE_MARK_CLEANING = "mark_cleaning_started"
+SERVICE_MARK_CLEAN = "mark_clean"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_TIMESTAMP = "timestamp"
 
@@ -59,6 +60,44 @@ def _find_coordinator_by_entity(
             continue
         if coord.calendar_entity_id == entity_id:
             return coord
+
+    msg = f"No TurnoverCal entry found for entity {entity_id}"
+    raise ServiceValidationError(
+        msg,
+        translation_domain=DOMAIN,
+        translation_key="entity_not_found",
+    )
+
+
+def _find_entry_data_by_entity(
+    domain_data: dict[str, Any],
+    entity_id: str,
+) -> dict[str, Any]:
+    """Find entry data matching the given entity ID.
+
+    Matches by calendar entity or binary_sensor entity ID.
+
+    Args:
+        domain_data: The hass.data[DOMAIN] dictionary.
+        entity_id: The entity ID to match.
+
+    Returns:
+        The matching entry data dictionary.
+
+    Raises:
+        ServiceValidationError: If no match is found.
+
+    """
+    for entry_data in domain_data.values():
+        if not isinstance(entry_data, dict):
+            continue
+        coord: TurnoverCoordinator | None = entry_data.get(
+            "coordinator",
+        )
+        if coord is not None and coord.calendar_entity_id == entity_id:
+            return entry_data
+        if entry_data.get("binary_sensor_entity_id") == entity_id:
+            return entry_data
 
     msg = f"No TurnoverCal entry found for entity {entity_id}"
     raise ServiceValidationError(
@@ -217,6 +256,84 @@ async def _handle_mark_cleaning(call: ServiceCall) -> None:
             )
 
 
+def _resolve_cleanliness_machines(
+    hass: HomeAssistant,
+    call: ServiceCall,
+) -> list[Any]:
+    """Resolve targets to cleanliness state machines.
+
+    Supports targeting by calendar entity, binary_sensor entity,
+    or config_entry_id.
+
+    Args:
+        hass: Home Assistant instance.
+        call: The service call with target and data.
+
+    Returns:
+        List of resolved CleanlinessStateMachine instances.
+
+    Raises:
+        ServiceValidationError: If targeting is invalid.
+
+    """
+    entity_ids: list[str] = cv.ensure_list(
+        call.data.get("entity_id", []),
+    )
+    config_entry_id = call.data.get(ATTR_CONFIG_ENTRY_ID)
+
+    if entity_ids and config_entry_id:
+        msg = "Provide either an entity target or config_entry_id, not both"
+        raise ServiceValidationError(
+            msg,
+            translation_domain=DOMAIN,
+            translation_key="ambiguous_target",
+        )
+
+    if not entity_ids and not config_entry_id:
+        msg = "Provide either an entity target or config_entry_id"
+        raise ServiceValidationError(
+            msg,
+            translation_domain=DOMAIN,
+            translation_key="missing_target",
+        )
+
+    domain_data: dict[str, Any] = hass.data.get(DOMAIN, {})
+
+    if config_entry_id:
+        entry_data = domain_data.get(config_entry_id)
+        if entry_data is None:
+            msg = f"Config entry {config_entry_id} not found or not loaded"
+            raise ServiceValidationError(
+                msg,
+                translation_domain=DOMAIN,
+                translation_key="entry_not_found",
+            )
+        return [entry_data["cleanliness"]]
+
+    machines = []
+    for eid in entity_ids:
+        entry_data = _find_entry_data_by_entity(domain_data, eid)
+        machines.append(entry_data["cleanliness"])
+    return machines
+
+
+async def _handle_mark_clean(call: ServiceCall) -> None:
+    """Handle the mark_clean service call.
+
+    Resolves all target cleanliness state machines and
+    marks each as clean immediately.
+
+    Args:
+        call: The service call.
+
+    """
+    hass = call.hass
+    machines = _resolve_cleanliness_machines(hass, call)
+
+    for machine in machines:
+        await machine.async_mark_clean()
+
+
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Register TurnoverCal services.
 
@@ -227,13 +344,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         hass: Home Assistant instance.
 
     """
-    if hass.services.has_service(DOMAIN, SERVICE_MARK_CLEANING):
-        return
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_MARK_CLEANING,
-        _handle_mark_cleaning,
-    )
+    if not hass.services.has_service(DOMAIN, SERVICE_MARK_CLEANING):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_MARK_CLEANING,
+            _handle_mark_cleaning,
+        )
+    if not hass.services.has_service(DOMAIN, SERVICE_MARK_CLEAN):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_MARK_CLEAN,
+            _handle_mark_clean,
+        )
 
 
 async def async_unload_services(hass: HomeAssistant) -> None:
@@ -247,3 +369,4 @@ async def async_unload_services(hass: HomeAssistant) -> None:
 
     """
     hass.services.async_remove(DOMAIN, SERVICE_MARK_CLEANING)
+    hass.services.async_remove(DOMAIN, SERVICE_MARK_CLEAN)

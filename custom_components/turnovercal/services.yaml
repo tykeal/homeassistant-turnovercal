@@ -34,3 +34,51 @@ mark_cleaning_started:
       example: "2026-03-10T09:30:00"
       selector:
         datetime:
+
+mark_clean:
+  name: Mark clean
+  description: >-
+    Mark the property as clean immediately. Cancels any
+    active cleaning timer. Use when cleaning is confirmed
+    complete or to override the automatic timer.
+  target:
+    entity:
+      integration: turnovercal
+      domain:
+        - calendar
+        - binary_sensor
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: >-
+        TurnoverCal config entry ID. Alternative to entity
+        targeting when calling from scripts or REST API.
+      required: false
+      example: "a1b2c3d4e5f6"
+      selector:
+        config_entry:
+          integration: turnovercal
+
+mark_dirty:
+  name: Mark dirty
+  description: >-
+    Mark the property as dirty immediately. Transitions to
+    the awaiting_cleaning phase. Use to manually flag a
+    property that needs cleaning.
+  target:
+    entity:
+      integration: turnovercal
+      domain:
+        - calendar
+        - binary_sensor
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: >-
+        TurnoverCal config entry ID. Alternative to entity
+        targeting when calling from scripts or REST API.
+      required: false
+      example: "a1b2c3d4e5f6"
+      selector:
+        config_entry:
+          integration: turnovercal

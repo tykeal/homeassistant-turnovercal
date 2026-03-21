@@ -21,7 +21,9 @@ from custom_components.turnovercal.models import TurnoverEvent
 from custom_components.turnovercal.services import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_TIMESTAMP,
+    SERVICE_MARK_CLEAN,
     SERVICE_MARK_CLEANING,
+    _handle_mark_clean,
     _handle_mark_cleaning,
     _parse_timestamp,
     _resolve_coordinators,
@@ -438,3 +440,141 @@ class TestServiceContract:
         svc = self._load_yaml()["mark_cleaning_started"]
         assert svc["name"] == "Mark cleaning started"
         assert len(svc["description"]) > 0
+
+
+# -------------------------------------------------------------------
+# T032: mark_clean service tests
+# -------------------------------------------------------------------
+
+
+class TestHandleMarkClean:
+    """Tests for the mark_clean service handler."""
+
+    async def test_service_registration(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """mark_clean service is registered after setup."""
+        await async_setup_services(hass)
+        assert hass.services.has_service(DOMAIN, SERVICE_MARK_CLEAN)
+
+    async def test_calls_async_mark_clean_via_entity(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Service call via entity target calls async_mark_clean."""
+        coord = _make_coordinator()
+        mock_machine = MagicMock()
+        mock_machine.async_mark_clean = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
+        call = _make_service_call(
+            hass,
+            target={
+                "entity_id": "calendar.rental_control_beach_house",
+            },
+        )
+        await _handle_mark_clean(call)
+        mock_machine.async_mark_clean.assert_awaited_once()
+
+    async def test_calls_async_mark_clean_via_config_entry(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Service call via config_entry_id calls async_mark_clean."""
+        coord = _make_coordinator()
+        mock_machine = MagicMock()
+        mock_machine.async_mark_clean = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
+        call = _make_service_call(
+            hass,
+            data={ATTR_CONFIG_ENTRY_ID: _ENTRY_ID},
+        )
+        await _handle_mark_clean(call)
+        mock_machine.async_mark_clean.assert_awaited_once()
+
+    async def test_binary_sensor_entity_targeting(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Service call via binary_sensor entity resolves correctly."""
+        coord = _make_coordinator()
+        mock_machine = MagicMock()
+        mock_machine.async_mark_clean = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+                "binary_sensor_entity_id": ("binary_sensor.turnovercal_dirty"),
+            },
+        }
+        call = _make_service_call(
+            hass,
+            target={
+                "entity_id": ("binary_sensor.turnovercal_dirty"),
+            },
+        )
+        await _handle_mark_clean(call)
+        mock_machine.async_mark_clean.assert_awaited_once()
+
+
+class TestMarkCleanServiceContract:
+    """Verify mark_clean service matches contract."""
+
+    _svc_path = (
+        Path(__file__).resolve().parent.parent
+        / "custom_components"
+        / "turnovercal"
+        / "services.yaml"
+    )
+
+    def _load_yaml(self) -> dict[str, Any]:
+        """Load the services.yaml file."""
+        with self._svc_path.open() as f:
+            result: dict[str, Any] = yaml.safe_load(f)
+            return result
+
+    def test_mark_clean_exists(self) -> None:
+        """mark_clean service exists in YAML."""
+        data = self._load_yaml()
+        assert "mark_clean" in data
+
+    def test_mark_clean_target(self) -> None:
+        """mark_clean targets calendar and binary_sensor."""
+        svc = self._load_yaml()["mark_clean"]
+        target = svc["target"]
+        entity = target["entity"]
+        assert entity["integration"] == "turnovercal"
+        domain = entity["domain"]
+        assert "calendar" in domain
+        assert "binary_sensor" in domain
+
+    def test_mark_clean_name(self) -> None:
+        """mark_clean has name and description."""
+        svc = self._load_yaml()["mark_clean"]
+        assert svc["name"] == "Mark clean"
+        assert len(svc["description"]) > 0
+
+    def test_mark_dirty_exists(self) -> None:
+        """mark_dirty service definition exists in YAML."""
+        data = self._load_yaml()
+        assert "mark_dirty" in data
+
+    def test_mark_dirty_target(self) -> None:
+        """mark_dirty targets calendar and binary_sensor."""
+        svc = self._load_yaml()["mark_dirty"]
+        target = svc["target"]
+        entity = target["entity"]
+        assert entity["integration"] == "turnovercal"
+        domain = entity["domain"]
+        assert "calendar" in domain
+        assert "binary_sensor" in domain

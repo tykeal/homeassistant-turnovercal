@@ -126,5 +126,19 @@
     "invalid_timezone": {
       "message": "Invalid Home Assistant timezone configuration."
     }
+  },
+  "services": {
+    "mark_cleaning_started": {
+      "name": "Mark cleaning started",
+      "description": "Signal that cleaning has begun for a turnover window."
+    },
+    "mark_clean": {
+      "name": "Mark clean",
+      "description": "Mark the property as clean immediately."
+    },
+    "mark_dirty": {
+      "name": "Mark dirty",
+      "description": "Mark the property as dirty immediately."
+    }
   }
 }

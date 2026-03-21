@@ -77,6 +77,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         lock_entity_id: str | None = None,
         cleaning_code_slot: int = 0,
         grace_hours: int = DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
+        config_entry_id: str | None = None,
     ) -> None:
         """Initialize the coordinator.
 
@@ -92,6 +93,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             lock_entity_id: Keymaster lock entity to monitor.
             cleaning_code_slot: Lock code slot for cleaning staff.
             grace_hours: Early-unlock grace period in hours.
+            config_entry_id: Config entry ID for cleanliness lookup.
 
         """
         super().__init__(
@@ -109,6 +111,8 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         self._lock_entity_id = lock_entity_id
         self._cleaning_code_slot = cleaning_code_slot
         self._grace_hours = grace_hours
+        self._config_entry_id = config_entry_id
+        self._previous_active_stays: dict[str, tuple[datetime, datetime]] = {}
 
     @property
     def calendar_entity_id(self) -> str:
@@ -356,7 +360,8 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
 
         Filters by entity ID, unlock state, and code slot number.
         On match, applies the cleaning signal to the active
-        turnover event.
+        turnover event and triggers the cleanliness lock code
+        handler.
 
         Args:
             event: The Keymaster bus event.
@@ -374,3 +379,15 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         adjusted = await self.apply_cleaning_signal(now)
         if adjusted:
             self.async_set_updated_data(self._cache.get_events())
+
+        # Trigger cleanliness state machine transition
+        domain_data = self.hass.data.get(DOMAIN, {})
+        for entry_data in domain_data.values():
+            if not isinstance(entry_data, dict):
+                continue
+            if entry_data.get("coordinator") is not self:
+                continue
+            cleanliness = entry_data.get("cleanliness")
+            if cleanliness is not None:
+                await cleanliness.async_handle_lock_code()
+            break
