@@ -29,6 +29,7 @@ _LOGGER = logging.getLogger(__name__)
 
 SERVICE_MARK_CLEANING = "mark_cleaning_started"
 SERVICE_MARK_CLEAN = "mark_clean"
+SERVICE_MARK_DIRTY = "mark_dirty"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_TIMESTAMP = "timestamp"
 
@@ -334,6 +335,24 @@ async def _handle_mark_clean(call: ServiceCall) -> None:
         await machine.async_mark_clean()
 
 
+async def _handle_mark_dirty(call: ServiceCall) -> None:
+    """Handle the mark_dirty service call.
+
+    Resolves all target cleanliness state machines and
+    requests a transition to the dirty state.  Properties
+    that are currently occupied remain in the occupied phase.
+
+    Args:
+        call: The service call.
+
+    """
+    hass = call.hass
+    machines = _resolve_cleanliness_machines(hass, call)
+
+    for machine in machines:
+        await machine.async_mark_dirty()
+
+
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Register TurnoverCal services.
 
@@ -356,6 +375,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             SERVICE_MARK_CLEAN,
             _handle_mark_clean,
         )
+    if not hass.services.has_service(DOMAIN, SERVICE_MARK_DIRTY):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_MARK_DIRTY,
+            _handle_mark_dirty,
+        )
 
 
 async def async_unload_services(hass: HomeAssistant) -> None:
@@ -370,3 +395,4 @@ async def async_unload_services(hass: HomeAssistant) -> None:
     """
     hass.services.async_remove(DOMAIN, SERVICE_MARK_CLEANING)
     hass.services.async_remove(DOMAIN, SERVICE_MARK_CLEAN)
+    hass.services.async_remove(DOMAIN, SERVICE_MARK_DIRTY)

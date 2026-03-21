@@ -27,6 +27,7 @@ from custom_components.turnovercal.const import (
     REASON_LOCK_CODE_ENTRY,
     REASON_MID_STAY_CANCELLATION,
     REASON_SERVICE_CALL_MARK_CLEAN,
+    REASON_SERVICE_CALL_MARK_DIRTY,
     REASON_STARTUP_RECONCILIATION,
 )
 
@@ -580,6 +581,118 @@ class CleanlinessStateMachine:
         )
         self._persist()
         self._fire_callbacks()
+
+    async def async_mark_dirty(self) -> None:
+        """Force the property to the dirty state.
+
+        If clean, transitions to dirty with
+        ``phase=PHASE_AWAITING_CLEANING`` and creates an immediate
+        cleaning event via the ``fallback_creator`` delegate.
+
+        If being_cleaned, cancels the active cleaning timer and
+        transitions to ``awaiting_cleaning`` (FR-016).
+
+        If occupied, stays in the ``occupied`` phase but updates
+        the transition reason.
+
+        If already dirty (any phase) and a cleaning event already
+        exists, no duplicate event is created (FR-025).
+
+        Always persists and fires callbacks on a real transition.
+        """
+        assert self._state is not None  # noqa: S101
+
+        now = datetime.now(tz=_UTC)
+
+        if not self._state.is_dirty:
+            self._mark_dirty_from_clean(now)
+            self._persist()
+            self._fire_callbacks()
+            try:
+                if self._fallback_creator is not None:
+                    await self._fallback_creator(now)
+            except Exception:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Failed to create cleaning event after "
+                    "mark_dirty; property is still marked dirty",
+                    exc_info=True,
+                )
+            return
+
+        # Cancel timer if being_cleaned (FR-016)
+        if self._state.phase == PHASE_BEING_CLEANED and self._timer_unsub is not None:
+            self._timer_unsub()
+            self._timer_unsub = None
+
+        self._mark_dirty_update_state(now)
+        self._persist()
+        self._fire_callbacks()
+        checkout = getattr(self._state, "associated_checkout_time", None)
+        ref_time = checkout if checkout is not None else now
+        try:
+            await self._ensure_cleaning_event(ref_time)
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "Failed to create cleaning event after "
+                "mark_dirty; property is still marked dirty",
+                exc_info=True,
+            )
+
+    def _mark_dirty_from_clean(self, now: datetime) -> None:
+        """Transition from clean to dirty/awaiting_cleaning.
+
+        Args:
+            now: The current UTC datetime.
+
+        """
+        self._state = CleanlinessState(
+            is_dirty=True,
+            phase=PHASE_AWAITING_CLEANING,
+            last_transition_at=now,
+            last_transition_reason=REASON_SERVICE_CALL_MARK_DIRTY,
+            dirty_since=now,
+            config_entry_id=self._entry_id,
+        )
+
+    def _mark_dirty_update_state(self, now: datetime) -> None:
+        """Update state for mark_dirty when already dirty.
+
+        Preserves occupied phase but resets being_cleaned to
+        awaiting_cleaning.  Always preserves associated_checkout_time.
+
+        Args:
+            now: The current UTC datetime.
+
+        """
+        assert self._state is not None  # noqa: S101
+        phase = (
+            PHASE_OCCUPIED
+            if self._state.phase == PHASE_OCCUPIED
+            else PHASE_AWAITING_CLEANING
+        )
+        checkout = self._state.associated_checkout_time
+        self._state = CleanlinessState(
+            is_dirty=True,
+            phase=phase,
+            last_transition_at=now,
+            last_transition_reason=REASON_SERVICE_CALL_MARK_DIRTY,
+            dirty_since=self._state.dirty_since or now,
+            associated_checkout_time=checkout,
+            config_entry_id=self._entry_id,
+        )
+
+    async def _ensure_cleaning_event(self, ref_time: datetime) -> None:
+        """Create a cleaning event if none covers the period (FR-025).
+
+        Args:
+            ref_time: The reference datetime used for coverage check.
+
+        """
+        if self._coverage_checker is None:
+            return
+        covered = await self._coverage_checker(ref_time)
+        if not covered and self._fallback_creator is not None:
+            await self._fallback_creator(ref_time)
 
     async def _validate_cleaning_coverage(
         self,

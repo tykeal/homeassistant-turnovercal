@@ -32,6 +32,7 @@ from custom_components.turnovercal.const import (
     REASON_LOCK_CODE_ENTRY,
     REASON_MID_STAY_CANCELLATION,
     REASON_SERVICE_CALL_MARK_CLEAN,
+    REASON_SERVICE_CALL_MARK_DIRTY,
     REASON_STARTUP_RECONCILIATION,
 )
 
@@ -2153,3 +2154,288 @@ class TestAsyncMarkClean:
         await machine.async_mark_clean()
 
         listener.assert_not_called()
+
+
+class TestAsyncMarkDirty:
+    """Tests for CleanlinessStateMachine.async_mark_dirty."""
+
+    async def test_clean_to_dirty(self, hass: HomeAssistant) -> None:
+        """Clean property becomes dirty/awaiting_cleaning."""
+        store = _make_mock_store(persisted_state=None)
+        fallback = AsyncMock(return_value="uid-1")
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+            fallback_creator=fallback,
+        )
+        await machine.async_initialize()
+        assert machine.phase == PHASE_CLEAN
+
+        await machine.async_mark_dirty()
+
+        assert machine.is_dirty is True
+        assert machine.phase == PHASE_AWAITING_CLEANING
+        assert machine.state.last_transition_reason == REASON_SERVICE_CALL_MARK_DIRTY
+        fallback.assert_awaited_once()
+        store.schedule_save.assert_called()
+
+    async def test_clean_to_dirty_creates_event(self, hass: HomeAssistant) -> None:
+        """mark_dirty on clean calls fallback_creator with now."""
+        store = _make_mock_store(persisted_state=None)
+        fallback = AsyncMock(return_value="uid-1")
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+            fallback_creator=fallback,
+        )
+        await machine.async_initialize()
+
+        before = datetime.now(tz=UTC)
+        await machine.async_mark_dirty()
+        after = datetime.now(tz=UTC)
+
+        call_arg = fallback.call_args[0][0]
+        assert before <= call_arg <= after
+
+    async def test_already_dirty_awaiting_no_dup(self, hass: HomeAssistant) -> None:
+        """Already dirty/awaiting stays dirty, no dup event (FR-025)."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+        coverage = AsyncMock(return_value=True)
+        fallback = AsyncMock(return_value="uid-1")
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+            coverage_checker=coverage,
+            fallback_creator=fallback,
+        )
+        await machine.async_initialize()
+
+        await machine.async_mark_dirty()
+
+        assert machine.is_dirty is True
+        assert machine.phase == PHASE_AWAITING_CLEANING
+        coverage.assert_awaited_once()
+        fallback.assert_not_awaited()
+
+    async def test_being_cleaned_cancels_timer(self, hass: HomeAssistant) -> None:
+        """mark_dirty during being_cleaned cancels timer (FR-016)."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+        ) as mock_track:
+            mock_unsub = MagicMock()
+            mock_track.return_value = mock_unsub
+
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=3.0,
+            )
+            await machine.async_initialize()
+
+            # Start cleaning timer
+            await machine.async_handle_lock_code()
+            assert machine.phase == PHASE_BEING_CLEANED
+            assert machine._timer_unsub is mock_unsub  # noqa: SLF001
+
+            await machine.async_mark_dirty()
+
+            mock_unsub.assert_called_once()
+            assert machine._timer_unsub is None  # noqa: SLF001
+            assert machine.is_dirty is True
+            assert machine.phase == PHASE_AWAITING_CLEANING
+            assert (
+                machine.state.last_transition_reason == REASON_SERVICE_CALL_MARK_DIRTY
+            )
+
+    async def test_occupied_stays_dirty_occupied(self, hass: HomeAssistant) -> None:
+        """mark_dirty during occupied stays dirty/occupied."""
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        coverage = AsyncMock(return_value=True)
+        fallback = AsyncMock(return_value="uid-1")
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+            coverage_checker=coverage,
+            fallback_creator=fallback,
+        )
+        await machine.async_initialize()
+
+        await machine.async_mark_dirty()
+
+        assert machine.is_dirty is True
+        assert machine.phase == PHASE_OCCUPIED
+        assert machine.state.last_transition_reason == REASON_SERVICE_CALL_MARK_DIRTY
+        coverage.assert_awaited_once()
+        fallback.assert_not_awaited()
+
+    async def test_occupied_no_dup_event_with_coverage(
+        self, hass: HomeAssistant
+    ) -> None:
+        """mark_dirty during occupied, coverage exists, no new event."""
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        coverage = AsyncMock(return_value=True)
+        fallback = AsyncMock(return_value="uid-1")
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+            coverage_checker=coverage,
+            fallback_creator=fallback,
+        )
+        await machine.async_initialize()
+
+        await machine.async_mark_dirty()
+
+        fallback.assert_not_awaited()
+
+    async def test_occupied_creates_event_without_coverage(
+        self, hass: HomeAssistant
+    ) -> None:
+        """mark_dirty during occupied, no coverage, creates event."""
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        coverage = AsyncMock(return_value=False)
+        fallback = AsyncMock(return_value="uid-1")
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+            coverage_checker=coverage,
+            fallback_creator=fallback,
+        )
+        await machine.async_initialize()
+
+        await machine.async_mark_dirty()
+
+        fallback.assert_awaited_once()
+
+    async def test_mark_dirty_fires_callbacks(self, hass: HomeAssistant) -> None:
+        """mark_dirty fires registered callbacks."""
+        store = _make_mock_store(persisted_state=None)
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        listener = MagicMock()
+        machine.register_callback(listener)
+
+        await machine.async_mark_dirty()
+
+        listener.assert_called_once()
+
+    async def test_mark_dirty_persists_state(self, hass: HomeAssistant) -> None:
+        """mark_dirty persists the new state."""
+        store = _make_mock_store(persisted_state=None)
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+        store.schedule_save.reset_mock()
+
+        await machine.async_mark_dirty()
+
+        store.schedule_save.assert_called_once()
+
+    async def test_dirty_since_preserved(self, hass: HomeAssistant) -> None:
+        """dirty_since is preserved when already dirty."""
+        original_dirty = datetime(2026, 3, 15, 10, 0, tzinfo=UTC)
+        persisted = CleanlinessState(
+            is_dirty=True,
+            phase=PHASE_AWAITING_CLEANING,
+            last_transition_at=original_dirty,
+            last_transition_reason=REASON_GUEST_CHECKIN,
+            dirty_since=original_dirty,
+            config_entry_id=_TEST_ENTRY_ID,
+        )
+        store = _make_mock_store(persisted_state=persisted)
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        await machine.async_mark_dirty()
+
+        assert machine.state.dirty_since == original_dirty
+
+    async def test_being_cleaned_creates_event_if_no_coverage(
+        self, hass: HomeAssistant
+    ) -> None:
+        """mark_dirty from being_cleaned creates event if uncovered."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+        coverage = AsyncMock(return_value=False)
+        fallback = AsyncMock(return_value="uid-1")
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+        ) as mock_track:
+            mock_unsub = MagicMock()
+            mock_track.return_value = mock_unsub
+
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=3.0,
+                coverage_checker=coverage,
+                fallback_creator=fallback,
+            )
+            await machine.async_initialize()
+            await machine.async_handle_lock_code()
+
+            await machine.async_mark_dirty()
+
+            fallback.assert_awaited_once()
+
+    async def test_clean_no_fallback_creator(self, hass: HomeAssistant) -> None:
+        """mark_dirty works without fallback_creator."""
+        store = _make_mock_store(persisted_state=None)
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        await machine.async_mark_dirty()
+
+        assert machine.is_dirty is True
+        assert machine.phase == PHASE_AWAITING_CLEANING
