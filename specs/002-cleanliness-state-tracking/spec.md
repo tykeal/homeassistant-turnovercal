@@ -344,11 +344,15 @@ restarting the integration, and verifying the binary sensor still reads "on"
   property to "clean."
 - **FR-009b**: System MUST provide a configurable `cleaning_duration_hours`
   option (per config entry) that controls the delay between cleaner lock code
-  entry and automatic clean transition. Default value: 3 hours. Minimum value: 0
-  (which means immediate transition, equivalent to legacy behavior). The value
-  is specified as a decimal number of hours. This option MUST be exposed in the
-  integration's config flow (options flow) so property managers can adjust it
-  without YAML editing.
+  entry and automatic clean transition. Default value:
+  3 hours. Minimum value: 0.05 hours (3 minutes). A
+  strictly positive minimum is required to guarantee
+  that the property does not transition directly to
+  "clean" on lock code entry, consistent with FR-009.
+  The value is specified as a decimal number of hours.
+  This option MUST be exposed in the integration's
+  config flow (options flow) so property managers can
+  adjust it without YAML editing.
 - **FR-009c**: If `mark_clean` is called while a cleaning duration timer is
   active, the timer MUST be cancelled and the property MUST transition to
   "clean" immediately.
@@ -387,7 +391,9 @@ restarting the integration, and verifying the binary sensor still reads "on"
 - **FR-015**: Fallback cleaning events from check-in validation MUST start at
   the scheduled check-out time and have a duration equal to the configured
   `trailing_duration_hours`. Immediate cleaning events from `mark_dirty` service
-  actions MUST start at the current time.
+  actions MUST start at the current time and have a
+  duration equal to the configured
+  `trailing_duration_hours`.
 - **FR-016**: System MUST NOT generate a new automatic cleaning event if one
   already exists for the current dirty period.
 - **FR-017**: When a property transitions to "clean," the system MUST stop
@@ -530,9 +536,13 @@ restarting the integration, and verifying the binary sensor still reads "on"
   event exists; it only creates a fallback if none exists.
 - Q: Should the binary sensor expose sub-states to distinguish between "guest is
   currently staying" and "guest left, awaiting cleaning"? → A: Yes. Add a
-  `phase` attribute on the binary sensor: `occupied` (guest actively staying) →
-  `awaiting_cleaning` (post-check-out, property still dirty). When clean, phase
-  reports `clean`.
+  `phase` attribute on the binary sensor: initially
+  `occupied` (guest actively staying) →
+  `awaiting_cleaning` (post-check-out, property still
+  dirty). When clean, phase reports `clean`. A later
+  clarification in this same session adds the
+  `being_cleaned` phase and summarizes the complete
+  set of values.
 - Q: How should TurnoverCal detect RC check-in/check-out signals — event
   listener, polling, or both? → A: Both. Real-time HA event listener for
   detection during normal operation, plus entity state reconciliation on
