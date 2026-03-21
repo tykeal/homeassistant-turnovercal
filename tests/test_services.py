@@ -23,8 +23,10 @@ from custom_components.turnovercal.services import (
     ATTR_TIMESTAMP,
     SERVICE_MARK_CLEAN,
     SERVICE_MARK_CLEANING,
+    SERVICE_MARK_DIRTY,
     _handle_mark_clean,
     _handle_mark_cleaning,
+    _handle_mark_dirty,
     _parse_timestamp,
     _resolve_coordinators,
     async_setup_services,
@@ -578,3 +580,88 @@ class TestMarkCleanServiceContract:
         domain = entity["domain"]
         assert "calendar" in domain
         assert "binary_sensor" in domain
+
+
+# -------------------------------------------------------------------
+# T047: mark_dirty service tests
+# -------------------------------------------------------------------
+
+
+class TestHandleMarkDirty:
+    """Tests for the mark_dirty service handler."""
+
+    async def test_service_registration(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """mark_dirty service is registered after setup."""
+        await async_setup_services(hass)
+        assert hass.services.has_service(DOMAIN, SERVICE_MARK_DIRTY)
+
+    async def test_calls_async_mark_dirty_via_entity(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Service call via entity target calls async_mark_dirty."""
+        coord = _make_coordinator()
+        mock_machine = MagicMock()
+        mock_machine.async_mark_dirty = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
+        call = _make_service_call(
+            hass,
+            target={
+                "entity_id": ("calendar.rental_control_beach_house"),
+            },
+        )
+        await _handle_mark_dirty(call)
+        mock_machine.async_mark_dirty.assert_awaited_once()
+
+    async def test_calls_async_mark_dirty_via_config_entry(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Service call via config_entry_id calls async_mark_dirty."""
+        coord = _make_coordinator()
+        mock_machine = MagicMock()
+        mock_machine.async_mark_dirty = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
+        call = _make_service_call(
+            hass,
+            data={ATTR_CONFIG_ENTRY_ID: _ENTRY_ID},
+        )
+        await _handle_mark_dirty(call)
+        mock_machine.async_mark_dirty.assert_awaited_once()
+
+    async def test_binary_sensor_entity_targeting(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Service call via binary_sensor entity resolves."""
+        coord = _make_coordinator()
+        mock_machine = MagicMock()
+        mock_machine.async_mark_dirty = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+                "binary_sensor_entity_id": ("binary_sensor.turnovercal_dirty"),
+            },
+        }
+        call = _make_service_call(
+            hass,
+            target={
+                "entity_id": ("binary_sensor.turnovercal_dirty"),
+            },
+        )
+        await _handle_mark_dirty(call)
+        mock_machine.async_mark_dirty.assert_awaited_once()
