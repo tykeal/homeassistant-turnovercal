@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
+from freezegun import freeze_time
 
 from custom_components.turnovercal import _async_reconcile_active_stay
 from custom_components.turnovercal.cleanliness import (
@@ -1312,7 +1313,7 @@ class TestRCEventListeners:
 class TestAsyncReconcileActiveStay:
     """Tests for _async_reconcile_active_stay startup reconciliation."""
 
-    @pytest.mark.freeze_time("2026-06-10T14:00:00+00:00")
+    @freeze_time("2026-06-10T14:00:00+00:00")
     async def test_active_stay_triggers_checkin(
         self,
         hass: HomeAssistant,
@@ -1356,7 +1357,7 @@ class TestAsyncReconcileActiveStay:
             )
             mock_checkin.assert_awaited_once_with(checkout)
 
-    @pytest.mark.freeze_time("2026-06-10T14:00:00+00:00")
+    @freeze_time("2026-06-10T14:00:00+00:00")
     async def test_no_active_stay_no_transition(
         self,
         hass: HomeAssistant,
@@ -1402,7 +1403,7 @@ class TestAsyncReconcileActiveStay:
             )
             mock_checkin.assert_not_awaited()
 
-    @pytest.mark.freeze_time("2026-06-10T14:00:00+00:00")
+    @freeze_time("2026-06-10T14:00:00+00:00")
     async def test_multiple_events_only_current_triggers(
         self,
         hass: HomeAssistant,

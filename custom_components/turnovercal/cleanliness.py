@@ -416,7 +416,14 @@ class CleanlinessStateMachine:
         self._persist()
         self._fire_callbacks()
 
-        await self._validate_cleaning_coverage(checkout_time)
+        try:
+            await self._validate_cleaning_coverage(checkout_time)
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "Failed to validate cleaning coverage after "
+                "check-in; continuing with occupied state",
+                exc_info=True,
+            )
 
     async def async_handle_checkout(self) -> None:
         """Handle a guest check-out event.

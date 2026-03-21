@@ -208,6 +208,12 @@ async def _async_reconcile_active_stay(
             and isinstance(evt_end, datetime)
             and evt_start <= now <= evt_end
         ):
+            if evt_end.tzinfo is None:
+                _LOGGER.warning(
+                    "Skipping RC event with naive end datetime %s",
+                    evt_end,
+                )
+                continue
             await state_machine.async_handle_checkin(evt_end)
             return
 
@@ -310,6 +316,12 @@ def _register_rc_listeners(
             _LOGGER.warning(
                 "Ignoring RC check-in: malformed checkout_time %r",
                 raw_checkout,
+            )
+            return
+        if not isinstance(checkout_dt, datetime) or checkout_dt.tzinfo is None:
+            _LOGGER.warning(
+                "Ignoring RC check-in: checkout_time is not tz-aware datetime: %r",
+                checkout_dt,
             )
             return
         await state_machine.async_handle_checkin(checkout_dt)
