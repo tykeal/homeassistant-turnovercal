@@ -191,6 +191,10 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         for uid in list(cached.keys()):
             if uid not in new_events:
                 cached_evt = cached[uid]
+                # Preserve lock-adjusted events even if their source
+                # booking was removed — the cleaner already confirmed.
+                if cached_evt.adjusted_by_lock:
+                    continue
                 if cached_evt.dtend > now:
                     await self._cache.async_remove_event(uid)
 
