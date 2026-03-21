@@ -39,3 +39,29 @@ EVENT_KEYMASTER = "keymaster_lock_state_changed"
 
 # Feed URL pattern (shared between HTTP view and sensor)
 FEED_URL_PATH = "/api/turnovercal/{token}/calendar.ics"
+
+# Cleanliness configuration
+CONF_CLEANING_DURATION_HOURS = "cleaning_duration_hours"
+
+# Cleanliness defaults
+DEFAULT_CLEANING_DURATION_HOURS = 3
+MIN_CLEANING_DURATION_HOURS = 0.05
+
+# Cleanliness phase values
+PHASE_CLEAN = "clean"
+PHASE_OCCUPIED = "occupied"
+PHASE_AWAITING_CLEANING = "awaiting_cleaning"
+PHASE_BEING_CLEANED = "being_cleaned"
+
+# Transition reason constants
+REASON_GUEST_CHECKIN = "guest_checkin"
+REASON_GUEST_CHECKOUT = "guest_checkout"
+REASON_MID_STAY_CANCELLATION = "mid_stay_cancellation"
+REASON_LOCK_CODE_ENTRY = "lock_code_entry"
+REASON_CLEANING_DURATION_ELAPSED = "cleaning_duration_elapsed"
+REASON_SERVICE_CALL_MARK_CLEAN = "service_call_mark_clean"
+REASON_SERVICE_CALL_MARK_DIRTY = "service_call_mark_dirty"
+REASON_STARTUP_RECONCILIATION = "startup_reconciliation"
+
+# Cleanliness store
+CLEANLINESS_STORE_VERSION = 1

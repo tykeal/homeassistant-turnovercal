@@ -1,0 +1,310 @@
+# SPDX-FileCopyrightText: 2026 Andrew Grimberg <tykeal@bardicgrove.org>
+# SPDX-License-Identifier: Apache-2.0
+
+"""Cleanliness state tracking for the TurnoverCal integration.
+
+Provides the CleanlinessState dataclass for per-property state and the
+CleanlinessStateMachine that manages phase lifecycle transitions.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo
+
+from custom_components.turnovercal.const import (
+    PHASE_AWAITING_CLEANING,
+    PHASE_BEING_CLEANED,
+    PHASE_CLEAN,
+    PHASE_OCCUPIED,
+    REASON_STARTUP_RECONCILIATION,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+
+    from custom_components.turnovercal.cleanliness_store import (
+        CleanlinessStateStore,
+    )
+
+_LOGGER = logging.getLogger(__name__)
+
+_UTC = ZoneInfo("UTC")
+
+VALID_PHASES: frozenset[str] = frozenset(
+    {
+        PHASE_CLEAN,
+        PHASE_OCCUPIED,
+        PHASE_AWAITING_CLEANING,
+        PHASE_BEING_CLEANED,
+    }
+)
+
+
+class CleanlinessState:
+    """Per-property cleanliness state managed by the state machine.
+
+    Tracks the current dirty/clean status, lifecycle phase, transition
+    timestamps, and optional timer information for the ``being_cleaned``
+    phase.
+    """
+
+    is_dirty: bool
+    phase: str
+    last_transition_at: datetime
+    last_transition_reason: str
+    timer_target: datetime | None
+    dirty_since: datetime | None
+    associated_checkout_time: datetime | None
+    config_entry_id: str
+
+    def __init__(  # noqa: PLR0913
+        self,
+        *,
+        is_dirty: bool,
+        phase: str,
+        last_transition_at: datetime,
+        last_transition_reason: str,
+        timer_target: datetime | None = None,
+        dirty_since: datetime | None = None,
+        associated_checkout_time: datetime | None = None,
+        config_entry_id: str,
+    ) -> None:
+        """Initialize a CleanlinessState with validation.
+
+        Args:
+            is_dirty: Whether the property is currently dirty.
+            phase: Current lifecycle phase (must be a valid phase).
+            last_transition_at: When the last transition occurred (UTC).
+            last_transition_reason: Why the last transition occurred.
+            timer_target: Cleaning timer target (UTC), for being_cleaned.
+            dirty_since: Start of the current dirty period (UTC).
+            associated_checkout_time: Checkout time for fallback (UTC).
+            config_entry_id: Config entry this state belongs to.
+
+        Raises:
+            ValueError: If *phase* is not one of the four valid phases.
+
+        """
+        if phase not in VALID_PHASES:
+            msg = f"Invalid phase '{phase}', must be one of {sorted(VALID_PHASES)}"
+            raise ValueError(msg)
+
+        self.is_dirty = is_dirty
+        self.phase = phase
+        self.last_transition_at = last_transition_at
+        self.last_transition_reason = last_transition_reason
+        self.timer_target = timer_target
+        self.dirty_since = dirty_since
+        self.associated_checkout_time = associated_checkout_time
+        self.config_entry_id = config_entry_id
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize this state to a JSON-compatible dict.
+
+        All datetime fields are stored as ISO 8601 strings with UTC
+        ``+00:00`` offset.  Optional ``None`` fields are stored as
+        JSON ``null``.
+
+        Returns:
+            A JSON-serializable dictionary.
+
+        """
+        return {
+            "is_dirty": self.is_dirty,
+            "phase": self.phase,
+            "last_transition_at": (
+                self.last_transition_at.astimezone(_UTC).isoformat()
+            ),
+            "last_transition_reason": self.last_transition_reason,
+            "timer_target": (
+                self.timer_target.astimezone(_UTC).isoformat()
+                if self.timer_target is not None
+                else None
+            ),
+            "dirty_since": (
+                self.dirty_since.astimezone(_UTC).isoformat()
+                if self.dirty_since is not None
+                else None
+            ),
+            "associated_checkout_time": (
+                self.associated_checkout_time.astimezone(_UTC).isoformat()
+                if self.associated_checkout_time is not None
+                else None
+            ),
+            "config_entry_id": self.config_entry_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CleanlinessState:
+        """Deserialize a CleanlinessState from a dict.
+
+        Parses ISO 8601 datetime strings back into timezone-aware
+        datetime objects.
+
+        Args:
+            data: Dictionary previously produced by ``to_dict()``.
+
+        Returns:
+            A new CleanlinessState instance.
+
+        """
+        last_transition_at = datetime.fromisoformat(
+            data["last_transition_at"],
+        )
+
+        timer_target = None
+        if data.get("timer_target") is not None:
+            timer_target = datetime.fromisoformat(data["timer_target"])
+
+        dirty_since = None
+        if data.get("dirty_since") is not None:
+            dirty_since = datetime.fromisoformat(data["dirty_since"])
+
+        associated_checkout_time = None
+        if data.get("associated_checkout_time") is not None:
+            associated_checkout_time = datetime.fromisoformat(
+                data["associated_checkout_time"],
+            )
+
+        return cls(
+            is_dirty=data["is_dirty"],
+            phase=data["phase"],
+            last_transition_at=last_transition_at,
+            last_transition_reason=data["last_transition_reason"],
+            timer_target=timer_target,
+            dirty_since=dirty_since,
+            associated_checkout_time=associated_checkout_time,
+            config_entry_id=data["config_entry_id"],
+        )
+
+
+class CleanlinessStateMachine:
+    """State machine managing the cleanliness lifecycle for a property.
+
+    Owns the current ``CleanlinessState`` and provides property
+    accessors, persistence via a ``CleanlinessStateStore``, and a
+    callback pattern for entity listeners.  Transition methods are
+    added in later phases per user story.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry_id: str,
+        store: CleanlinessStateStore,
+        cleaning_duration_hours: float,
+    ) -> None:
+        """Initialize the cleanliness state machine.
+
+        Args:
+            hass: Home Assistant instance.
+            entry_id: Config entry ID this machine belongs to.
+            store: Persistent storage for the cleanliness state.
+            cleaning_duration_hours: Cleaning timer duration in hours.
+
+        """
+        self._hass = hass
+        self._entry_id = entry_id
+        self._store = store
+        self._cleaning_duration_hours = cleaning_duration_hours
+        self._state: CleanlinessState | None = None
+        self._timer_unsub: CALLBACK_TYPE | None = None
+        self._callbacks: list[Callable[[], None]] = []
+
+    @property
+    def state(self) -> CleanlinessState:
+        """Return the current cleanliness state.
+
+        Raises:
+            RuntimeError: If ``async_initialize()`` has not been called.
+
+        Returns:
+            The current CleanlinessState.
+
+        """
+        if self._state is None:
+            msg = "State machine not initialized. Call async_initialize() first."
+            raise RuntimeError(msg)
+        return self._state
+
+    @property
+    def is_dirty(self) -> bool:
+        """Return whether the property is currently dirty.
+
+        Returns:
+            True if the property is dirty, False if clean.
+
+        """
+        return self.state.is_dirty
+
+    @property
+    def phase(self) -> str:
+        """Return the current cleanliness phase.
+
+        Returns:
+            The current phase string constant.
+
+        """
+        return self.state.phase
+
+    async def async_initialize(self) -> None:
+        """Load state from store or create default clean state.
+
+        If a persisted state exists in the store it is used directly.
+        Otherwise a default *clean* state is created and saved.
+        """
+        loaded = await self._store.async_load()
+        if loaded is not None:
+            self._state = loaded
+        else:
+            now = datetime.now(tz=_UTC)
+            self._state = CleanlinessState(
+                is_dirty=False,
+                phase=PHASE_CLEAN,
+                last_transition_at=now,
+                last_transition_reason=REASON_STARTUP_RECONCILIATION,
+                config_entry_id=self._entry_id,
+            )
+            await self._store.async_save(self._state)
+
+    async def async_shutdown(self) -> None:
+        """Cancel any active timer and clean up resources."""
+        if self._timer_unsub is not None:
+            self._timer_unsub()
+            self._timer_unsub = None
+
+    def register_callback(self, callback: Callable[[], None]) -> Callable[[], None]:
+        """Register a callback invoked on state changes.
+
+        Args:
+            callback: A no-argument callable to invoke on transitions.
+
+        Returns:
+            A callable that, when called, unregisters the callback.
+
+        """
+        self._callbacks.append(callback)
+
+        def _unregister() -> None:
+            """Remove the registered callback."""
+            if callback in self._callbacks:
+                self._callbacks.remove(callback)
+
+        return _unregister
+
+    def unregister_callback(self, callback: Callable[[], None]) -> None:
+        """Remove a previously registered state change callback.
+
+        No-op if the callback is not currently registered.
+
+        Args:
+            callback: The callback to remove.
+
+        """
+        if callback in self._callbacks:
+            self._callbacks.remove(callback)
