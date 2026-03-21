@@ -5,24 +5,28 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
 
+from custom_components.turnovercal import _async_reconcile_active_stay
 from custom_components.turnovercal.cleanliness import (
     CleanlinessState,
     CleanlinessStateMachine,
 )
 from custom_components.turnovercal.const import (
+    EVENT_RC_CHECKIN,
+    EVENT_RC_CHECKOUT,
     PHASE_AWAITING_CLEANING,
     PHASE_BEING_CLEANED,
     PHASE_CLEAN,
     PHASE_OCCUPIED,
     REASON_CLEANING_DURATION_ELAPSED,
     REASON_GUEST_CHECKIN,
+    REASON_GUEST_CHECKOUT,
     REASON_STARTUP_RECONCILIATION,
 )
 
@@ -880,3 +884,570 @@ class TestCleanlinessStateMachineRestartPersistence:
 
         assert machine.phase == PHASE_BEING_CLEANED
         assert machine.is_dirty is True
+
+
+# ---------------------------------------------------------------------------
+# T020 - async_handle_checkin
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncHandleCheckin:
+    """Tests for CleanlinessStateMachine.async_handle_checkin."""
+
+    async def test_clean_to_dirty_occupied(self, hass: HomeAssistant) -> None:
+        """Check-in transitions clean→dirty/occupied."""
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+        store.schedule_save.reset_mock()
+
+        checkout = datetime(2026, 3, 20, 11, 0, tzinfo=UTC)
+        await machine.async_handle_checkin(checkout)
+
+        assert machine.is_dirty is True
+        assert machine.phase == PHASE_OCCUPIED
+        assert machine.state.last_transition_reason == REASON_GUEST_CHECKIN
+        assert machine.state.associated_checkout_time == checkout
+        store.schedule_save.assert_called()
+
+    async def test_idempotent_when_already_occupied(self, hass: HomeAssistant) -> None:
+        """Calling checkin when already occupied is a no-op."""
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+        store.schedule_save.reset_mock()
+
+        checkout = datetime(2026, 3, 20, 11, 0, tzinfo=UTC)
+        await machine.async_handle_checkin(checkout)
+
+        assert machine.phase == PHASE_OCCUPIED
+        store.schedule_save.assert_not_called()
+
+    async def test_being_cleaned_cancels_timer_moves_to_occupied(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Check-in during being_cleaned cancels timer, goes occupied."""
+        future_target = datetime(2099, 1, 1, 12, 0, tzinfo=UTC)
+        persisted = CleanlinessState(
+            is_dirty=True,
+            phase=PHASE_BEING_CLEANED,
+            last_transition_at=datetime(2099, 1, 1, 9, 0, tzinfo=UTC),
+            last_transition_reason=REASON_GUEST_CHECKIN,
+            timer_target=future_target,
+            dirty_since=datetime(2099, 1, 1, 9, 0, tzinfo=UTC),
+            config_entry_id=_TEST_ENTRY_ID,
+        )
+        store = _make_mock_store(persisted_state=persisted)
+
+        mock_unsub = MagicMock()
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+            return_value=mock_unsub,
+        ):
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=3.0,
+            )
+            await machine.async_initialize()
+
+        checkout = datetime(2099, 1, 5, 11, 0, tzinfo=UTC)
+        await machine.async_handle_checkin(checkout)
+
+        mock_unsub.assert_called_once()
+        assert machine._timer_unsub is None  # noqa: SLF001
+        assert machine.is_dirty is True
+        assert machine.phase == PHASE_OCCUPIED
+
+    async def test_checkin_fires_callbacks(self, hass: HomeAssistant) -> None:
+        """Check-in fires registered callbacks."""
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        listener = MagicMock()
+        machine.register_callback(listener)
+
+        checkout = datetime(2026, 3, 20, 11, 0, tzinfo=UTC)
+        await machine.async_handle_checkin(checkout)
+
+        listener.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# T021 - async_handle_checkout
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncHandleCheckout:
+    """Tests for CleanlinessStateMachine.async_handle_checkout."""
+
+    async def test_occupied_to_awaiting_cleaning(self, hass: HomeAssistant) -> None:
+        """Checkout transitions occupied→awaiting_cleaning."""
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+        store.schedule_save.reset_mock()
+
+        await machine.async_handle_checkout()
+
+        assert machine.is_dirty is True
+        assert machine.phase == PHASE_AWAITING_CLEANING
+        assert machine.state.last_transition_reason == REASON_GUEST_CHECKOUT
+        store.schedule_save.assert_called()
+
+    async def test_noop_when_not_occupied(self, hass: HomeAssistant) -> None:
+        """Checkout when not occupied is a no-op."""
+        persisted = _make_dirty_state(
+            phase=PHASE_AWAITING_CLEANING,
+        )
+        store = _make_mock_store(persisted_state=persisted)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+        store.schedule_save.reset_mock()
+
+        await machine.async_handle_checkout()
+
+        assert machine.phase == PHASE_AWAITING_CLEANING
+        store.schedule_save.assert_not_called()
+
+    async def test_noop_when_clean(self, hass: HomeAssistant) -> None:
+        """Checkout when clean is a no-op."""
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+        store.schedule_save.reset_mock()
+
+        await machine.async_handle_checkout()
+
+        assert machine.phase == PHASE_CLEAN
+        store.schedule_save.assert_not_called()
+
+    async def test_checkout_fires_callbacks(self, hass: HomeAssistant) -> None:
+        """Checkout fires registered callbacks."""
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        listener = MagicMock()
+        machine.register_callback(listener)
+
+        await machine.async_handle_checkout()
+
+        listener.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# T022 - Cleaning event validation (coverage_checker / fallback_creator)
+# ---------------------------------------------------------------------------
+
+
+class TestCleaningEventValidation:
+    """Tests for cleaning event coverage validation on check-in."""
+
+    async def test_checkin_calls_coverage_checker(self, hass: HomeAssistant) -> None:
+        """Check-in validates cleaning event coverage."""
+        checker = AsyncMock(return_value=True)
+        creator = AsyncMock()
+
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+            coverage_checker=checker,
+            fallback_creator=creator,
+        )
+        await machine.async_initialize()
+
+        checkout = datetime(2026, 3, 20, 11, 0, tzinfo=UTC)
+        await machine.async_handle_checkin(checkout)
+
+        checker.assert_awaited_once_with(checkout)
+        creator.assert_not_awaited()
+
+    async def test_no_fallback_when_coverage_exists(self, hass: HomeAssistant) -> None:
+        """When turnover event exists, no fallback is created."""
+        checker = AsyncMock(return_value=True)
+        creator = AsyncMock()
+
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+            coverage_checker=checker,
+            fallback_creator=creator,
+        )
+        await machine.async_initialize()
+
+        checkout = datetime(2026, 3, 20, 11, 0, tzinfo=UTC)
+        await machine.async_handle_checkin(checkout)
+
+        creator.assert_not_awaited()
+
+    async def test_fallback_created_when_no_coverage(self, hass: HomeAssistant) -> None:
+        """When no turnover event exists, fallback is created."""
+        checker = AsyncMock(return_value=False)
+        creator = AsyncMock()
+
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+            coverage_checker=checker,
+            fallback_creator=creator,
+        )
+        await machine.async_initialize()
+
+        checkout = datetime(2026, 3, 20, 11, 0, tzinfo=UTC)
+        await machine.async_handle_checkin(checkout)
+
+        creator.assert_awaited_once_with(checkout)
+
+    async def test_no_validation_without_delegates(self, hass: HomeAssistant) -> None:
+        """Check-in without delegates skips validation."""
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        checkout = datetime(2026, 3, 20, 11, 0, tzinfo=UTC)
+        # Should not raise
+        await machine.async_handle_checkin(checkout)
+
+        assert machine.phase == PHASE_OCCUPIED
+
+
+# ---------------------------------------------------------------------------
+# T023 - RC event listeners
+# ---------------------------------------------------------------------------
+
+
+class TestRCEventListeners:
+    """Tests for RC check-in / check-out HA event handling."""
+
+    async def test_checkin_event_triggers_handle_checkin(
+        self, hass: HomeAssistant
+    ) -> None:
+        """RC check-in event triggers async_handle_checkin."""
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        checkout = datetime(2026, 3, 20, 11, 0, tzinfo=UTC)
+        with patch.object(
+            machine,
+            "async_handle_checkin",
+            new_callable=AsyncMock,
+        ) as mock_checkin:
+            entity_id = "calendar.rental_control"
+
+            async def _handler(event: Any) -> None:  # noqa: ANN401
+                """Simulate the RC check-in handler."""
+                data = event.data or {}
+                if data.get("entity_id") != entity_id:
+                    return
+                raw = data.get("checkout_time")
+                if raw is None:
+                    return
+                dt = datetime.fromisoformat(raw) if isinstance(raw, str) else raw
+                await machine.async_handle_checkin(dt)
+
+            hass.bus.async_listen(EVENT_RC_CHECKIN, _handler)
+            hass.bus.async_fire(
+                EVENT_RC_CHECKIN,
+                {
+                    "entity_id": entity_id,
+                    "checkout_time": checkout.isoformat(),
+                },
+            )
+            await hass.async_block_till_done()
+
+            mock_checkin.assert_awaited_once_with(checkout)
+
+    async def test_checkout_event_triggers_handle_checkout(
+        self, hass: HomeAssistant
+    ) -> None:
+        """RC check-out event triggers async_handle_checkout."""
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with patch.object(
+            machine,
+            "async_handle_checkout",
+            new_callable=AsyncMock,
+        ) as mock_checkout:
+            entity_id = "calendar.rental_control"
+
+            async def _handler(event: Any) -> None:  # noqa: ANN401
+                """Simulate the RC check-out handler."""
+                data = event.data or {}
+                if data.get("entity_id") != entity_id:
+                    return
+                await machine.async_handle_checkout()
+
+            hass.bus.async_listen(EVENT_RC_CHECKOUT, _handler)
+            hass.bus.async_fire(
+                EVENT_RC_CHECKOUT,
+                {"entity_id": entity_id},
+            )
+            await hass.async_block_till_done()
+
+            mock_checkout.assert_awaited_once()
+
+    async def test_event_filtering_ignores_other_entity(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Events for a different entity are ignored."""
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with patch.object(
+            machine,
+            "async_handle_checkin",
+            new_callable=AsyncMock,
+        ) as mock_checkin:
+            target_entity = "calendar.rental_control"
+
+            async def _handler(event: Any) -> None:  # noqa: ANN401
+                """Simulate handler with entity filter."""
+                data = event.data or {}
+                if data.get("entity_id") != target_entity:
+                    return
+                raw = data.get("checkout_time")
+                if raw and isinstance(raw, str):
+                    dt = datetime.fromisoformat(raw)
+                    await machine.async_handle_checkin(dt)
+
+            hass.bus.async_listen(EVENT_RC_CHECKIN, _handler)
+
+            # Fire event for a different entity
+            hass.bus.async_fire(
+                EVENT_RC_CHECKIN,
+                {
+                    "entity_id": "calendar.other_rental",
+                    "checkout_time": (
+                        datetime(
+                            2026,
+                            3,
+                            20,
+                            11,
+                            0,
+                            tzinfo=UTC,
+                        ).isoformat()
+                    ),
+                },
+            )
+            await hass.async_block_till_done()
+
+            mock_checkin.assert_not_awaited()
+
+
+class TestAsyncReconcileActiveStay:
+    """Tests for _async_reconcile_active_stay startup reconciliation."""
+
+    @pytest.mark.freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_active_stay_triggers_checkin(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Active guest stay at startup triggers async_handle_checkin."""
+        now = datetime(2026, 6, 10, 14, 0, tzinfo=UTC)
+        checkin = now - timedelta(hours=3)
+        checkout = now + timedelta(hours=20)
+
+        cal_event = MagicMock()
+        cal_event.start = checkin
+        cal_event.end = checkout
+
+        calendar_entity = MagicMock()
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[cal_event],
+        )
+
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with patch.object(
+            machine,
+            "async_handle_checkin",
+            new_callable=AsyncMock,
+        ) as mock_checkin:
+            await _async_reconcile_active_stay(
+                hass,
+                coordinator,
+                machine,
+                "UTC",
+            )
+            mock_checkin.assert_awaited_once_with(checkout)
+
+    @pytest.mark.freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_no_active_stay_no_transition(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """No active guest stay at startup triggers no transition."""
+        now = datetime(2026, 6, 10, 14, 0, tzinfo=UTC)
+
+        past_event = MagicMock()
+        past_event.start = now - timedelta(days=2)
+        past_event.end = now - timedelta(days=1)
+
+        future_event = MagicMock()
+        future_event.start = now + timedelta(days=1)
+        future_event.end = now + timedelta(days=3)
+
+        calendar_entity = MagicMock()
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[past_event, future_event],
+        )
+
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with patch.object(
+            machine,
+            "async_handle_checkin",
+            new_callable=AsyncMock,
+        ) as mock_checkin:
+            await _async_reconcile_active_stay(
+                hass,
+                coordinator,
+                machine,
+                "UTC",
+            )
+            mock_checkin.assert_not_awaited()
+
+    @pytest.mark.freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_multiple_events_only_current_triggers(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Only the event spanning now triggers checkin."""
+        now = datetime(2026, 6, 10, 14, 0, tzinfo=UTC)
+
+        past_event = MagicMock()
+        past_event.start = now - timedelta(days=5)
+        past_event.end = now - timedelta(days=3)
+
+        active_event = MagicMock()
+        active_event.start = now - timedelta(hours=2)
+        active_event.end = now + timedelta(hours=22)
+
+        future_event = MagicMock()
+        future_event.start = now + timedelta(days=2)
+        future_event.end = now + timedelta(days=4)
+
+        calendar_entity = MagicMock()
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[past_event, active_event, future_event],
+        )
+
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with patch.object(
+            machine,
+            "async_handle_checkin",
+            new_callable=AsyncMock,
+        ) as mock_checkin:
+            await _async_reconcile_active_stay(
+                hass,
+                coordinator,
+                machine,
+                "UTC",
+            )
+            mock_checkin.assert_awaited_once_with(active_event.end)

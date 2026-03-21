@@ -22,11 +22,13 @@ from custom_components.turnovercal.const import (
     PHASE_CLEAN,
     PHASE_OCCUPIED,
     REASON_CLEANING_DURATION_ELAPSED,
+    REASON_GUEST_CHECKIN,
+    REASON_GUEST_CHECKOUT,
     REASON_STARTUP_RECONCILIATION,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 
@@ -223,12 +225,14 @@ class CleanlinessStateMachine:
     added in later phases per user story.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         hass: HomeAssistant,
         entry_id: str,
         store: CleanlinessStateStore,
         cleaning_duration_hours: float,
+        coverage_checker: Callable[[datetime], Awaitable[bool]] | None = None,
+        fallback_creator: Callable[[datetime], Awaitable[None]] | None = None,
     ) -> None:
         """Initialize the cleanliness state machine.
 
@@ -237,12 +241,18 @@ class CleanlinessStateMachine:
             entry_id: Config entry ID this machine belongs to.
             store: Persistent storage for the cleanliness state.
             cleaning_duration_hours: Cleaning timer duration in hours.
+            coverage_checker: Optional async callable that checks
+                whether a turnover event covers a given checkout time.
+            fallback_creator: Optional async callable that creates a
+                fallback turnover event for a given checkout time.
 
         """
         self._hass = hass
         self._entry_id = entry_id
         self._store = store
         self._cleaning_duration_hours = cleaning_duration_hours
+        self._coverage_checker = coverage_checker
+        self._fallback_creator = fallback_creator
         self._state: CleanlinessState | None = None
         self._timer_unsub: CALLBACK_TYPE | None = None
         self._callbacks: list[Callable[[], None]] = []
@@ -363,6 +373,96 @@ class CleanlinessStateMachine:
                     "Error in cleanliness callback: %r",
                     callback,
                 )
+
+    async def async_handle_checkin(
+        self,
+        checkout_time: datetime,
+    ) -> None:
+        """Handle a guest check-in event.
+
+        Transitions the property to dirty with phase ``occupied``.
+        If the property is already occupied this is a no-op.  If the
+        property is in ``being_cleaned`` phase the cleaning timer is
+        cancelled and the phase moves to ``occupied`` (FR-017).
+
+        After transitioning, validates that a turnover event covers the
+        upcoming checkout via the ``coverage_checker`` / ``fallback_creator``
+        delegates.
+
+        Args:
+            checkout_time: The expected checkout time for this stay.
+
+        """
+        assert self._state is not None  # noqa: S101
+
+        if self._state.phase == PHASE_OCCUPIED:
+            return
+
+        # Cancel cleaning timer if being_cleaned (FR-017)
+        if self._state.phase == PHASE_BEING_CLEANED and self._timer_unsub is not None:
+            self._timer_unsub()
+            self._timer_unsub = None
+
+        now = datetime.now(tz=_UTC)
+        self._state = CleanlinessState(
+            is_dirty=True,
+            phase=PHASE_OCCUPIED,
+            last_transition_at=now,
+            last_transition_reason=REASON_GUEST_CHECKIN,
+            dirty_since=self._state.dirty_since or now,
+            associated_checkout_time=checkout_time,
+            config_entry_id=self._entry_id,
+        )
+        self._persist()
+        self._fire_callbacks()
+
+        await self._validate_cleaning_coverage(checkout_time)
+
+    async def async_handle_checkout(self) -> None:
+        """Handle a guest check-out event.
+
+        Transitions from ``occupied`` to ``awaiting_cleaning``.
+        No-op if not currently in the ``occupied`` phase.
+        """
+        assert self._state is not None  # noqa: S101
+
+        if self._state.phase != PHASE_OCCUPIED:
+            return
+
+        now = datetime.now(tz=_UTC)
+        self._state = CleanlinessState(
+            is_dirty=True,
+            phase=PHASE_AWAITING_CLEANING,
+            last_transition_at=now,
+            last_transition_reason=REASON_GUEST_CHECKOUT,
+            dirty_since=self._state.dirty_since or now,
+            associated_checkout_time=(self._state.associated_checkout_time),
+            config_entry_id=self._entry_id,
+        )
+        self._persist()
+        self._fire_callbacks()
+
+    async def _validate_cleaning_coverage(
+        self,
+        checkout_time: datetime,
+    ) -> None:
+        """Ensure a turnover event covers the checkout time.
+
+        Uses the injected ``coverage_checker`` delegate to determine
+        whether an existing turnover event already covers the period.
+        If not, the ``fallback_creator`` delegate is called to
+        synthesise a fallback event.
+
+        Args:
+            checkout_time: The checkout time to validate coverage for.
+
+        """
+        if self._coverage_checker is None or self._fallback_creator is None:
+            return
+
+        covered = await self._coverage_checker(checkout_time)
+        if not covered:
+            await self._fallback_creator(checkout_time)
 
     async def _async_reconstitute_timer(self) -> None:
         """Reconstitute a cleaning timer after restart if needed.

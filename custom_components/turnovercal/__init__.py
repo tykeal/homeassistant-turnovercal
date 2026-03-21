@@ -6,8 +6,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+import secrets
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -37,22 +39,25 @@ from custom_components.turnovercal.const import (
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     EVENT_KEYMASTER,
+    EVENT_RC_CHECKIN,
+    EVENT_RC_CHECKOUT,
     KEYMASTER_DOMAIN,
     KM_LOCK_ENTITY_KEY,
 )
 from custom_components.turnovercal.coordinator import TurnoverCoordinator
 from custom_components.turnovercal.event_cache import EventCache
 from custom_components.turnovercal.http_view import TurnoverCalView
+from custom_components.turnovercal.models import TurnoverEvent
 from custom_components.turnovercal.services import (
     async_setup_services,
     async_unload_services,
 )
 
 if TYPE_CHECKING:
-    from datetime import datetime
+    from collections.abc import Awaitable, Callable
 
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import Event, HomeAssistant
     from homeassistant.helpers.entity_component import EntityComponent
 
 _LOGGER = logging.getLogger(__name__)
@@ -157,6 +162,177 @@ def _resolve_lock_monitoring(
     return enabled, lock_entity_id, slot, grace
 
 
+async def _async_reconcile_active_stay(
+    hass: HomeAssistant,
+    coordinator: TurnoverCoordinator,
+    state_machine: CleanlinessStateMachine,
+    timezone_str: str,
+) -> None:
+    """Detect an active guest stay and trigger check-in if needed.
+
+    Queries the RC calendar entity for events spanning the current
+    time.  If a guest stay is found where check-in (start) has
+    passed but check-out (end) has not, triggers
+    ``async_handle_checkin`` to recover from missed events (FR-008).
+
+    Args:
+        hass: Home Assistant instance.
+        coordinator: The turnover coordinator (provides calendar
+            entity access).
+        state_machine: The cleanliness state machine.
+        timezone_str: IANA timezone string for the property.
+
+    """
+    now = datetime.now(tz=ZoneInfo(timezone_str))
+    start = now - timedelta(days=1)
+    end = now + timedelta(days=1)
+
+    try:
+        rc_events = await coordinator.calendar_entity.async_get_events(
+            hass,
+            start,
+            end,
+        )
+    except Exception:  # noqa: BLE001
+        _LOGGER.warning(
+            "RC calendar unavailable during startup reconciliation",
+            exc_info=True,
+        )
+        return
+
+    for event in rc_events:
+        evt_start = event.start
+        evt_end = event.end
+        if (
+            isinstance(evt_start, datetime)
+            and isinstance(evt_end, datetime)
+            and evt_start <= now <= evt_end
+        ):
+            await state_machine.async_handle_checkin(evt_end)
+            return
+
+
+def _build_coverage_delegates(  # noqa: PLR0913
+    coordinator: TurnoverCoordinator,
+    cache: EventCache,
+    summary_prefix: str,
+    property_name: str,
+    tz_str: str,
+    cleaning_duration: float,
+) -> tuple[
+    Callable[[datetime], Awaitable[bool]],
+    Callable[[datetime], Awaitable[None]],
+]:
+    """Build coverage-checker and fallback-creator callables.
+
+    Returns a pair of async callables that check whether a turnover
+    event covers a given checkout time and, if not, create a fallback
+    trailing event.
+
+    Args:
+        coordinator: The turnover coordinator with cached events.
+        cache: The event cache for persisting fallback events.
+        summary_prefix: Prefix for event summaries.
+        property_name: Property name for event summaries.
+        tz_str: IANA timezone string for the property.
+        cleaning_duration: Cleaning duration in hours.
+
+    Returns:
+        Tuple of (coverage_checker, fallback_creator).
+
+    """
+
+    async def _check(checkout_time: datetime) -> bool:
+        """Check if a turnover event covers the checkout time."""
+        for event in coordinator.cache_events.values():
+            if event.dtstart <= checkout_time <= event.dtend:
+                return True
+        return False
+
+    async def _create(checkout_time: datetime) -> None:
+        """Create a fallback turnover event for the checkout."""
+        tz = ZoneInfo(tz_str)
+        local_checkout = checkout_time.astimezone(tz)
+        uid = f"{secrets.token_hex(8)}@turnovercal.homeassistant"
+        fallback = TurnoverEvent(
+            uid=uid,
+            summary=f"{summary_prefix} {property_name}",
+            dtstart=local_checkout,
+            dtend=local_checkout
+            + timedelta(
+                hours=cleaning_duration,
+            ),
+            timezone=tz_str,
+            source_checkout_id=uid,
+            source_checkin_id=None,
+            created_at=datetime.now(tz=ZoneInfo("UTC")),
+            is_trailing=True,
+        )
+        await cache.async_add_event(fallback)
+
+    return _check, _create
+
+
+def _register_rc_listeners(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    entity_id: str,
+    state_machine: CleanlinessStateMachine,
+) -> None:
+    """Subscribe to RC check-in / check-out bus events.
+
+    Filters events to only those matching the configured calendar
+    entity ID and delegates to the state machine.
+
+    Args:
+        hass: Home Assistant instance.
+        entry: Config entry for unload tracking.
+        entity_id: The RC calendar entity ID to filter on.
+        state_machine: The cleanliness state machine.
+
+    """
+
+    async def _handle_rc_checkin(event: Event) -> None:
+        """Handle RC check-in bus event."""
+        data = event.data or {}
+        if data.get("entity_id", "") != entity_id:
+            return
+        raw_checkout = data.get("checkout_time")
+        if raw_checkout is None:
+            return
+        try:
+            checkout_dt = (
+                datetime.fromisoformat(raw_checkout)
+                if isinstance(raw_checkout, str)
+                else raw_checkout
+            )
+        except (ValueError, TypeError):
+            _LOGGER.warning(
+                "Ignoring RC check-in: malformed checkout_time %r",
+                raw_checkout,
+            )
+            return
+        await state_machine.async_handle_checkin(checkout_dt)
+
+    async def _handle_rc_checkout(event: Event) -> None:
+        """Handle RC check-out bus event."""
+        data = event.data or {}
+        if data.get("entity_id", "") != entity_id:
+            return
+        await state_machine.async_handle_checkout()
+
+    unsub_checkin = hass.bus.async_listen(
+        EVENT_RC_CHECKIN,
+        _handle_rc_checkin,
+    )
+    unsub_checkout = hass.bus.async_listen(
+        EVENT_RC_CHECKOUT,
+        _handle_rc_checkout,
+    )
+    entry.async_on_unload(unsub_checkin)
+    entry.async_on_unload(unsub_checkout)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -225,11 +401,23 @@ async def async_setup_entry(
         DEFAULT_CLEANING_DURATION_HOURS,
     )
     cleanliness_store = CleanlinessStateStore(hass, entry.entry_id)
+
+    coverage_checker, fallback_creator = _build_coverage_delegates(
+        coordinator,
+        cache,
+        summary_prefix,
+        property_name,
+        tz_str,
+        cleaning_duration,
+    )
+
     state_machine = CleanlinessStateMachine(
         hass=hass,
         entry_id=entry.entry_id,
         store=cleanliness_store,
         cleaning_duration_hours=cleaning_duration,
+        coverage_checker=coverage_checker,
+        fallback_creator=fallback_creator,
     )
     await state_machine.async_initialize()
 
@@ -259,6 +447,14 @@ async def async_setup_entry(
     # Start coordinator
     await coordinator.async_config_entry_first_refresh()
 
+    # Startup reconciliation: detect active guest stay (FR-008)
+    await _async_reconcile_active_stay(
+        hass,
+        coordinator,
+        state_machine,
+        tz_str,
+    )
+
     # Register services (idempotent)
     await async_setup_services(hass)
 
@@ -275,6 +471,9 @@ async def async_setup_entry(
             coordinator.handle_lock_event,
         )
         entry.async_on_unload(unsub_lock)
+
+    # Register RC check-in / check-out event listeners
+    _register_rc_listeners(hass, entry, entity_id, state_machine)
 
     async def _async_hourly_cleanup(_now: datetime) -> None:
         """Run hourly cleanup of expired events."""
