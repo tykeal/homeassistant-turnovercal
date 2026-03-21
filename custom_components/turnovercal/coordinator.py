@@ -306,9 +306,8 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         """Notify the cleanliness state machine of a mid-stay cancel.
 
         Looks up the cleanliness state machine via ``hass.data`` and
-        calls ``async_handle_midstay_cancellation``.  After the call,
-        any newly created cache events are flagged as mid-stay
-        cancellation events so ``_merge_events`` preserves them.
+        calls ``async_handle_midstay_cancellation``.  Uses the returned
+        UID to flag the created event so ``_merge_events`` preserves it.
 
         Args:
             check_in_time: Original check-in time of the cancelled
@@ -324,15 +323,14 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         if cleanliness is None:
             return
 
-        before_uids = set(self._cache.get_events().keys())
-        await cleanliness.async_handle_midstay_cancellation(
+        created_uid = await cleanliness.async_handle_midstay_cancellation(
             check_in_time,
         )
-        after = self._cache.get_events()
-        for new_uid in set(after.keys()) - before_uids:
-            evt = after[new_uid]
-            evt.created_from_midstay_cancellation = True
-            await self._cache.async_add_event(evt)
+        if created_uid is not None:
+            evt = self._cache.get_events().get(created_uid)
+            if evt is not None:
+                evt.created_from_midstay_cancellation = True
+                await self._cache.async_add_event(evt)
 
     @staticmethod
     def _merge_metadata(

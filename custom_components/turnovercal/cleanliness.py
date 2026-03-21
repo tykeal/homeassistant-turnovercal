@@ -233,7 +233,7 @@ class CleanlinessStateMachine:
         store: CleanlinessStateStore,
         cleaning_duration_hours: float,
         coverage_checker: Callable[[datetime], Awaitable[bool]] | None = None,
-        fallback_creator: Callable[[datetime], Awaitable[None]] | None = None,
+        fallback_creator: Callable[[datetime], Awaitable[str | None]] | None = None,
     ) -> None:
         """Initialize the cleanliness state machine.
 
@@ -457,7 +457,7 @@ class CleanlinessStateMachine:
     async def async_handle_midstay_cancellation(
         self,
         check_in_time: datetime,
-    ) -> None:
+    ) -> str | None:
         """Handle a mid-stay reservation cancellation.
 
         Transitions the property to dirty with
@@ -474,6 +474,9 @@ class CleanlinessStateMachine:
             check_in_time: The original check-in time of the cancelled
                 reservation.
 
+        Returns:
+            UID of the fallback event created, or None.
+
         """
         assert self._state is not None  # noqa: S101
 
@@ -485,14 +488,14 @@ class CleanlinessStateMachine:
 
         # FR-011: pre-arrival cancellation -- check-in not yet passed
         if check_in_time > now:
-            return
+            return None
 
         # FR-025: already awaiting or undergoing cleaning -- skip
         if self._state.phase in (
             PHASE_AWAITING_CLEANING,
             PHASE_BEING_CLEANED,
         ):
-            return
+            return None
 
         self._state = CleanlinessState(
             is_dirty=True,
@@ -503,11 +506,13 @@ class CleanlinessStateMachine:
             config_entry_id=self._entry_id,
         )
 
+        created_uid: str | None = None
         if self._fallback_creator is not None:
-            await self._fallback_creator(now)
+            created_uid = await self._fallback_creator(now)
 
         self._persist()
         self._fire_callbacks()
+        return created_uid
 
     async def _validate_cleaning_coverage(
         self,

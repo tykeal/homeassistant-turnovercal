@@ -1292,6 +1292,70 @@ class TestMidstayCancellationDetection:
 
         mock_cleanliness.async_handle_midstay_cancellation.assert_not_awaited()
 
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_coordinator_flags_created_event(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Coordinator flags the fallback event from cancellation."""
+        now = datetime(2026, 3, 15, 14, 0, tzinfo=ET)
+        stay_start = now - timedelta(hours=4)
+        stay_end = now + timedelta(hours=20)
+
+        active_event = CalendarEvent(
+            start=stay_start,
+            end=stay_end,
+            summary="Guest A",
+            uid="rc-stay-001",
+        )
+
+        fallback = _make_event(
+            15, 14, 15, 18, uid="abcdef0123456789@turnovercal.homeassistant"
+        )
+        cache = _make_cache_mock()
+        cache.get_events.return_value = {}
+
+        coordinator = _make_coordinator_with_entry(
+            hass,
+            cache,
+            rc_events=[active_event],
+        )
+
+        mock_cleanliness = AsyncMock()
+        mock_cleanliness.async_handle_midstay_cancellation = AsyncMock(
+            return_value="abcdef0123456789@turnovercal.homeassistant",
+        )
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["test_entry_123"] = {
+            "cleanliness": mock_cleanliness,
+        }
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        # Make cache return the fallback event for the second poll
+        cache.get_events.return_value = {
+            "abcdef0123456789@turnovercal.homeassistant": fallback,
+        }
+
+        with (
+            patch.object(
+                coordinator._calendar_entity,  # noqa: SLF001
+                "async_get_events",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                return_value=[],
+            ),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        assert fallback.created_from_midstay_cancellation is True
+
 
 # ---------------------------------------------------------------------------
 # T044: Tests for preserving mid-stay cancellation events in merge
