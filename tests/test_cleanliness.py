@@ -559,3 +559,47 @@ class TestCleanlinessStateMachineCallbacks:
         unregister = machine.register_callback(callback)
         unregister()
         unregister()  # Second call should be safe
+
+    async def test_notify_callbacks_invokes_all(self, hass: HomeAssistant) -> None:
+        """_notify_callbacks invokes every registered callback."""
+        store = _make_mock_store()
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+
+        cb1 = MagicMock()
+        cb2 = MagicMock()
+        machine.register_callback(cb1)
+        machine.register_callback(cb2)
+
+        machine._notify_callbacks()  # noqa: SLF001
+
+        cb1.assert_called_once()
+        cb2.assert_called_once()
+
+    async def test_notify_callbacks_continues_on_error(
+        self, hass: HomeAssistant
+    ) -> None:
+        """_notify_callbacks suppresses errors in one callback."""
+        store = _make_mock_store()
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+
+        cb_bad = MagicMock(side_effect=RuntimeError("boom"))
+        cb_good = MagicMock()
+        machine.register_callback(cb_bad)
+        machine.register_callback(cb_good)
+
+        machine._notify_callbacks()  # noqa: SLF001
+
+        cb_bad.assert_called_once()
+        cb_good.assert_called_once()

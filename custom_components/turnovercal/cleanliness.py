@@ -336,3 +336,17 @@ class CleanlinessStateMachine:
         """
         if callback in self._callbacks:
             self._callbacks.remove(callback)
+
+    def _notify_callbacks(self) -> None:
+        """Invoke all registered callbacks after a state transition.
+
+        Called by transition methods after the internal state has been
+        updated and persisted.  Each callback is invoked in
+        registration order; exceptions are suppressed so one failing
+        listener cannot prevent others from executing.
+        """
+        for cb in list(self._callbacks):
+            try:
+                cb()
+            except Exception:
+                _LOGGER.exception("Error in cleanliness callback")

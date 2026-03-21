@@ -147,7 +147,7 @@ newly configured property.
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T012 [P] [US3] Unit tests for `TurnoverCalCleanlinessSensor` in
+- [X] T012 [P] [US3] Unit tests for `TurnoverCalCleanlinessSensor` in
       `tests/test_cleanliness_sensor.py` — test entity creation with correct
       unique_id (`{entry_id}_cleanliness`), device class
       `problem`, translation key `dirty`, reports `on`
@@ -161,7 +161,7 @@ newly configured property.
 
 ### Implementation for User Story 3
 
-- [ ] T013 [US3] Create `TurnoverCalCleanlinessSensor` binary sensor entity in
+- [X] T013 [US3] Create `TurnoverCalCleanlinessSensor` binary sensor entity in
       `custom_components/turnovercal/binary_sensor.py` — extend
       `RestoreEntity, BinarySensorEntity`, use
       `device_class=BinarySensorDeviceClass.PROBLEM`,
@@ -185,13 +185,13 @@ newly configured property.
       `dirty_since` (ISO string or null),
       `timer_target` (ISO string or null).
       Implement `async_setup_entry()` platform function
-- [ ] T014 [US3] Add binary sensor translation keys to
+- [X] T014 [US3] Add binary sensor translation keys to
       `custom_components/turnovercal/strings.json` — add
       `entity.binary_sensor.dirty.name` = "Cleanliness"
       under the entity section. Add phase attribute
       translation if needed.
       Keep `translations/en.json` in sync
-- [ ] T015 [US3] Register callback in binary sensor to update on state machine
+- [X] T015 [US3] Register callback in binary sensor to update on state machine
       changes in `custom_components/turnovercal/binary_sensor.py` — the state
       machine needs a listener/callback mechanism so the binary sensor calls
       `self.async_write_ha_state()` when the cleanliness state changes. Add
