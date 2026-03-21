@@ -84,9 +84,13 @@ accordingly.
 
 1. **Given** a property in the "dirty" state with `phase` = `awaiting_cleaning`,
    **When** a cleaner unlocks the property using the designated cleaning lock
-   code (adjusted_by_lock signal), **Then** the property remains in the "dirty"
-   state, the `phase` attribute transitions to `being_cleaned`, and a delayed
-   timer begins (default 3 hours, configurable via `cleaning_duration_hours`).
+   code (handled as a Keymaster lock event or equivalent
+   that marks the associated turnover event as
+   `adjusted_by_lock`), **Then** the property remains
+   in the "dirty" state, the `phase` attribute
+   transitions to `being_cleaned`, and a delayed timer
+   begins (default 3 hours, configurable via
+   `cleaning_duration_hours`).
 2. **Given** a property in the "dirty" state with `phase` = `being_cleaned` and
    the configured cleaning duration has elapsed, **When** the delay timer fires,
    **Then** the property transitions to "clean," the binary sensor reads "off,"
