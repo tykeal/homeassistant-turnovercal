@@ -1458,6 +1458,39 @@ class TestAsyncReconcileActiveStay:
             )
             mock_checkin.assert_awaited_once_with(active_event.end)
 
+    @freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_calendar_unavailable_preserves_state(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """RC calendar exception preserves existing state."""
+        dirty = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=dirty)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        calendar_entity = MagicMock()
+        calendar_entity.async_get_events = AsyncMock(
+            side_effect=RuntimeError("calendar offline"),
+        )
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        await _async_reconcile_active_stay(
+            hass,
+            coordinator,
+            machine,
+            "UTC",
+        )
+
+        assert machine.is_dirty is True
+        assert machine.phase == PHASE_AWAITING_CLEANING
+
 
 # ---------------------------------------------------------------------------
 # T040 - Mid-stay cancellation
