@@ -12,9 +12,12 @@ to planning
 
 ## Content Quality
 
-- [x] No implementation details (languages, frameworks, APIs)
+- [ ] No implementation details (languages, frameworks,
+  APIs) — spec references HA-specific concepts (entity
+  IDs, options flow, service names, device class)
 - [x] Focused on user value and business needs
-- [x] Written for non-technical stakeholders
+- [ ] Written for non-technical stakeholders — spec
+  includes HA platform-specific terminology
 - [x] All mandatory sections completed
 
 ## Requirement Completeness

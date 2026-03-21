@@ -32,7 +32,8 @@ depends on the system knowing when a property becomes dirty. Without automatic
 dirty detection, no downstream cleaning logic can function.
 
 **Independent Test**: Can be fully tested by configuring a property with a
-single reservation that ends, then verifying the binary sensor shows "dirty" and
+single reservation that ends, then verifying the binary sensor shows "on"
+(dirty) and
 a cleaning event appears on the calendar.
 
 **Acceptance Scenarios**:
@@ -116,8 +117,11 @@ correct on/off states matching the property's cleanliness.
 
 1. **Given** a property with the TurnoverCal integration configured, **When**
    the integration loads, **Then** a binary sensor entity appears under the
-   property's existing device with the entity ID pattern
-   `binary_sensor.turnovercal_<property>_dirty`.
+   property's existing device with an entity ID consistent
+   with other TurnoverCal entities (for example,
+   `binary_sensor.<property>_cleanliness`, derived from
+   the config entry title and a `cleanliness` translation
+   key).
 2. **Given** a property in the "dirty" state, **When** viewing the binary
    sensor, **Then** the state reads "on" and additional context attributes
    include when the state last changed, the reason for the transition, and the
@@ -418,8 +422,14 @@ restarting the integration, and verifying the binary sensor still reads "on"
   transition the `phase` to `clean`. The `awaiting_cleaning` phase is the
   canonical value for all dirty-but-no-cleaner-started states; the
   `being_cleaned` phase indicates active cleaning in progress.
-- **FR-023**: The binary sensor entity ID MUST follow the pattern
-  `binary_sensor.turnovercal_<property_name>_dirty`.
+- **FR-023**: The binary sensor entity ID MUST be derived
+  using this integration's standard naming convention
+  (config entry title + translation key for the
+  cleanliness binary sensor) rather than a hard-coded
+  `turnovercal_<property_name>_dirty` pattern. The
+  translation key for this sensor MUST be stable so that
+  the resulting entity ID remains predictable for
+  automations.
 
 ### Key Entities
 
