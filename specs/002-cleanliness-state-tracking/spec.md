@@ -33,9 +33,10 @@ check-out time so the cleaning team knows the property needs attention.
 depends on the system knowing when a property becomes dirty. Without automatic
 dirty detection, no downstream cleaning logic can function.
 
-**Independent Test**: Can be fully tested by configuring a property with a
-single reservation that ends, then verifying the binary sensor shows "on"
-(dirty) and
+**Independent Test**: Can be fully tested by
+configuring a property with a single incoming
+reservation whose check-in time arrives, then
+verifying the binary sensor shows "on" (dirty) and
 a cleaning event appears on the calendar.
 
 **Acceptance Scenarios**:
@@ -191,8 +192,8 @@ cleaning event appears.
 1. **Given** a property in the "clean" state with no upcoming cleaning events,
    **When** the property manager calls the `mark_dirty` service action, **Then**
    the property transitions to "dirty" with `phase` = `awaiting_cleaning`, and
-   an immediate cleaning event is created with duration equal to trailing
-   duration hours.
+   an immediate cleaning event is created with
+   duration equal to `trailing_duration_hours`.
 2. **Given** a property already in the "dirty" state, **When** the property
    manager calls the `mark_dirty` service action, **Then** the state remains
    "dirty" and no duplicate cleaning event is created if one already exists.
