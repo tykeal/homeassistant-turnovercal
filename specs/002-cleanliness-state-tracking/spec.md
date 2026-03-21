@@ -23,9 +23,9 @@ calendar without any manual intervention.
 
 When a guest checks in (RC signals a check-in event), the property transitions
 to "dirty." The system validates that a turnover cleaning event already exists
-for the corresponding checkout period. If no such event exists (safety-net
+for the corresponding check-out period. If no such event exists (safety-net
 case), the system generates a fallback cleaning event starting at the scheduled
-checkout time so the cleaning team knows the property needs attention.
+check-out time so the cleaning team knows the property needs attention.
 
 **Why this priority**: This is the foundational behavior — the entire feature
 depends on the system knowing when a property becomes dirty. Without automatic
@@ -43,12 +43,13 @@ a cleaning event appears on the calendar.
    state transitions to "dirty," the binary sensor reads "on," and the `phase`
    attribute reports `occupied`.
 2. **Given** a property that just became dirty via check-in and no existing
-   turnover event covers the corresponding checkout, **When** the system
+   turnover event covers the corresponding check-out, **When** the system
    validates cleaning coverage, **Then** a fallback cleaning event is created
-   starting at the scheduled checkout time with a duration equal to the
+   starting at the scheduled check-out time with a duration equal to the
    configured trailing duration hours.
 3. **Given** a property that just became dirty via check-in and an existing
-   turnover event already covers the corresponding checkout, **When** the system
+   turnover event already covers the corresponding
+   check-out, **When** the system
    validates cleaning coverage, **Then** no additional cleaning event is created
    (the existing turnover event suffices).
 4. **Given** a property in the "dirty" state with `phase` = `occupied`, **When**
@@ -149,8 +150,9 @@ persist even after the source booking is gone.
 
 **Acceptance Scenarios**:
 
-1. **Given** a property with an active guest stay (checkin has passed, checkout
-   has not), **When** the booking is removed from the reservation calendar,
+1. **Given** a property with an active guest stay
+   (check-in has passed, check-out has not), **When**
+   the booking is removed from the reservation calendar,
    **Then** the property transitions to "dirty" with `phase` =
    `awaiting_cleaning` (the guest's stay is terminated).
 2. **Given** a cleaning event was created due to a mid-stay cancellation,
@@ -218,7 +220,7 @@ restarting the integration, and verifying the binary sensor still reads "on"
    Home Assistant was down, **When** Home Assistant restarts and performs entity
    state reconciliation, **Then** the property transitions to "dirty" with
    `phase` = `occupied` and the system validates cleaning event coverage for the
-   corresponding checkout.
+   corresponding check-out.
 
 ---
 
@@ -226,7 +228,7 @@ restarting the integration, and verifying the binary sensor still reads "on"
 
 - What happens when a property has back-to-back reservations with no gap? When
   the first guest checks in, the property becomes dirty. The existing turnover
-  event from normal computation covers the cleaning between the first checkout
+  event from normal computation covers the cleaning between the first check-out
   and next check-in — the check-in validation confirms this and no fallback
   event is generated.
 - What happens when a property is marked clean while a cleaning event is
@@ -234,7 +236,7 @@ restarting the integration, and verifying the binary sensor still reads "on"
   clean; the existing lock-adjusted event is preserved. No new events are
   generated.
 - What happens when two dirty triggers fire in rapid succession (e.g., a
-  checkout followed immediately by a cancellation of the next booking)? The
+  check-out followed immediately by a cancellation of the next booking)? The
   property remains dirty from the first trigger. The second trigger does not
   create a duplicate cleaning event if one already exists.
 - What happens when the reservation calendar is temporarily unavailable? The
@@ -275,7 +277,7 @@ restarting the integration, and verifying the binary sensor still reads "on"
 - What happens when a guest checks in while the property is in `being_cleaned`
   phase? The guest check-in takes priority: the cleaning duration timer is
   cancelled, the property remains dirty, `phase` transitions to `occupied`, and
-  cleaning event coverage is validated for the new guest's checkout.
+  cleaning event coverage is validated for the new guest's check-out.
 - What happens if Home Assistant restarts while a property is in `being_cleaned`
   phase with an active cleaning duration timer? The persisted state includes the
   `being_cleaned` phase and the timer's target completion time. On restart, the
@@ -303,9 +305,9 @@ restarting the integration, and verifying the binary sensor still reads "on"
 - **FR-005**: System MUST transition a property to "dirty" when a guest check-in
   event is detected (RC signals guest arrival at the property).
 - **FR-005a**: On check-in dirty trigger, the system MUST first validate that a
-  turnover cleaning event already exists for the corresponding checkout period.
+  turnover cleaning event already exists for the corresponding check-out period.
   Only if no such event exists MUST the system create a fallback cleaning event
-  starting at the scheduled checkout time with a duration equal to
+  starting at the scheduled check-out time with a duration equal to
   `trailing_duration_hours`.
 - **FR-005b**: System MUST consume RC-provided check-in and check-out events or
   state changes via real-time HA event listeners to detect guest arrivals and
@@ -316,13 +318,13 @@ restarting the integration, and verifying the binary sensor still reads "on"
   triggering the appropriate dirty/phase state transitions for any missed
   events.
 - **FR-006**: System MUST transition a property to "dirty" when a booking is
-  removed from the reservation calendar while the guest is mid-stay (checkin
-  time has passed but checkout time has not).
+  removed from the reservation calendar while the guest is mid-stay (check-in
+  time has passed but check-out time has not).
 - **FR-007**: System MUST detect mid-stay cancellations by comparing the current
   set of active reservations against the previously known set during each
   polling cycle.
 - **FR-008**: System MUST NOT transition to "dirty" when a booking is cancelled
-  before the guest's checkin time (pre-arrival cancellation).
+  before the guest's check-in time (pre-arrival cancellation).
 
 #### Clean Triggers
 
@@ -354,7 +356,7 @@ restarting the integration, and verifying the binary sensor still reads "on"
 - **FR-009e**: If a guest check-in occurs while a cleaning duration timer is
   active, the timer MUST be cancelled, the property MUST remain dirty with
   `phase` = `occupied`, and cleaning event coverage MUST be validated for the
-  new guest's checkout.
+  new guest's check-out.
 - **FR-009f**: The cleaning duration timer's target completion time MUST be
   persisted so it survives Home Assistant restarts. On restart, if the target
   time has passed, the system MUST transition to "clean" immediately; otherwise,
@@ -378,10 +380,10 @@ restarting the integration, and verifying the binary sensor still reads "on"
 
 - **FR-014**: When a property transitions to "dirty" via check-in trigger, the
   system MUST validate that a turnover cleaning event exists for the
-  corresponding checkout. If none exists, the system MUST generate a fallback
+  corresponding check-out. If none exists, the system MUST generate a fallback
   cleaning event.
 - **FR-015**: Fallback cleaning events from check-in validation MUST start at
-  the scheduled checkout time and have a duration equal to the configured
+  the scheduled check-out time and have a duration equal to the configured
   `trailing_duration_hours`. Immediate cleaning events from `mark_dirty` service
   actions MUST start at the current time.
 - **FR-016**: System MUST NOT generate a new automatic cleaning event if one
@@ -409,8 +411,10 @@ restarting the integration, and verifying the binary sensor still reads "on"
   `awaiting_cleaning` after the guest checks out while the property remains
   dirty and no cleaner has started, `being_cleaned` after a cleaning lock code
   entry while the cleaning duration timer is active, and `clean` when the
-  property is in the clean state. The full phase lifecycle is: `occupied` →
-  `awaiting_cleaning` → `being_cleaned` → `clean`.
+  property is in the clean state. The full phase
+  lifecycle is a repeating cycle starting from `clean`:
+  `clean` → `occupied` → `awaiting_cleaning` →
+  `being_cleaned` → `clean`.
 - **FR-022b**: On detection of a guest check-out event (while the property is
   dirty), the system MUST transition the `phase` attribute from `occupied` to
   `awaiting_cleaning`. On a mid-stay cancellation dirty trigger, the `phase`
@@ -449,8 +453,9 @@ restarting the integration, and verifying the binary sensor still reads "on"
   entities. Exposes state attributes for dashboard display and automation
   triggers, including a `phase` attribute (`occupied`, `awaiting_cleaning`,
   `being_cleaned`, `clean`) to distinguish sub-states within the dirty/cleaning
-  lifecycle. The full phase lifecycle is: `occupied` → `awaiting_cleaning` →
-  `being_cleaned` → `clean`.
+  lifecycle. The full phase lifecycle is as defined
+  in **FR-022b**, including the cyclic `clean` →
+  `occupied` transition.
 
 ### Assumptions
 
@@ -516,14 +521,15 @@ restarting the integration, and verifying the binary sensor still reads "on"
 
 - Q: When the check-in dirty trigger fires and no turnover cleaning event
   exists, should the fallback cleaning event start immediately or be deferred to
-  checkout time? → A: Deferred start at checkout time. This is a safety-net case
+  check-out time? → A: Deferred start at check-out
+  time. This is a safety-net case
   — the turnover cleaning event should already exist from normal turnover
   computation. The check-in dirty trigger primarily validates that a cleaning
   event exists; it only creates a fallback if none exists.
 - Q: Should the binary sensor expose sub-states to distinguish between "guest is
   currently staying" and "guest left, awaiting cleaning"? → A: Yes. Add a
   `phase` attribute on the binary sensor: `occupied` (guest actively staying) →
-  `awaiting_cleaning` (post-checkout, property still dirty). When clean, phase
+  `awaiting_cleaning` (post-check-out, property still dirty). When clean, phase
   reports `clean`.
 - Q: How should TurnoverCal detect RC check-in/check-out signals — event
   listener, polling, or both? → A: Both. Real-time HA event listener for
@@ -531,9 +537,9 @@ restarting the integration, and verifying the binary sensor still reads "on"
   startup/reload to catch any check-in or check-out events missed during
   downtime.
 - Q: Should `mark_dirty` (manual) and mid-stay cancellation use the same
-  `awaiting_cleaning` phase as post-checkout, or introduce a distinct phase? →
+  `awaiting_cleaning` phase as post-check-out, or introduce a distinct phase? →
   A: Reuse `awaiting_cleaning` for all dirty-but-no-guest cases (manual
-  `mark_dirty`, mid-stay cancellation, post-checkout). No new phase values
+  `mark_dirty`, mid-stay cancellation, post-check-out). No new phase values
   needed for those cases; the new `being_cleaned` phase is exclusively for
   post-lock-code-entry cleaning in progress.
 - Q: What phase should the property enter when a cleaner uses their lock code? →
@@ -549,5 +555,5 @@ restarting the integration, and verifying the binary sensor still reads "on"
   cancelled.
 - Q: What are the complete set of phase attribute values? → A: Four values:
   `clean` (ready), `occupied` (guest checked in), `awaiting_cleaning`
-  (post-checkout/manual dirty, waiting for cleaners), `being_cleaned` (cleaner
+  (post-check-out/manual dirty, waiting for cleaners), `being_cleaned` (cleaner
   code used, auto-transitions to `clean` after configurable delay).

@@ -40,8 +40,12 @@ to planning
 
 ## Notes
 
-- All items pass validation. Specification is ready for `/speckit.clarify` or
-  `/speckit.plan`.
+- Most items pass validation. The unchecked content
+  quality items reflect that this spec necessarily
+  references HA platform concepts (entity IDs,
+  options flow, services) since TurnoverCal is a
+  Home Assistant integration. Specification is ready
+  for `/speckit.clarify` or `/speckit.plan`.
 - The spec references existing integration concepts (`adjusted_by_lock`,
   `trailing_duration_hours`, `mark_cleaning_started` service pattern) by name
   since these are domain terms, not implementation details.
