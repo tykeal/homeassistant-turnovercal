@@ -21,6 +21,7 @@ from custom_components.turnovercal.cleanliness import (
 from custom_components.turnovercal.const import (
     EVENT_RC_CHECKIN,
     EVENT_RC_CHECKOUT,
+    MIN_CLEANING_DURATION_HOURS,
     PHASE_AWAITING_CLEANING,
     PHASE_BEING_CLEANED,
     PHASE_CLEAN,
@@ -28,6 +29,8 @@ from custom_components.turnovercal.const import (
     REASON_CLEANING_DURATION_ELAPSED,
     REASON_GUEST_CHECKIN,
     REASON_GUEST_CHECKOUT,
+    REASON_LOCK_CODE_ENTRY,
+    REASON_SERVICE_CALL_MARK_CLEAN,
     REASON_STARTUP_RECONCILIATION,
 )
 
@@ -1452,3 +1455,460 @@ class TestAsyncReconcileActiveStay:
                 "UTC",
             )
             mock_checkin.assert_awaited_once_with(active_event.end)
+
+
+# ---------------------------------------------------------------------------
+# T029 - async_handle_lock_code
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncHandleLockCode:
+    """Tests for CleanlinessStateMachine.async_handle_lock_code."""
+
+    async def test_awaiting_cleaning_to_being_cleaned(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Lock code entry transitions awaiting_cleaning→being_cleaned."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+        ) as mock_track:
+            mock_track.return_value = MagicMock()
+
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=3.0,
+            )
+            await machine.async_initialize()
+
+            assert machine.phase == PHASE_AWAITING_CLEANING
+
+            await machine.async_handle_lock_code()
+
+            assert machine.is_dirty is True
+            assert machine.phase == PHASE_BEING_CLEANED
+            assert machine.state.last_transition_reason == REASON_LOCK_CODE_ENTRY
+            mock_track.assert_called_once()
+            store.schedule_save.assert_called()
+
+    async def test_lock_code_starts_timer(self, hass: HomeAssistant) -> None:
+        """Lock code entry starts cleaning duration timer."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+        ) as mock_track:
+            mock_unsub = MagicMock()
+            mock_track.return_value = mock_unsub
+
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=2.0,
+            )
+            await machine.async_initialize()
+
+            before = datetime.now(tz=UTC)
+            await machine.async_handle_lock_code()
+            after = datetime.now(tz=UTC)
+
+            mock_track.assert_called_once()
+            call_args = mock_track.call_args
+            timer_target_arg = call_args[0][2]
+
+            # Timer target should be approximately now + 2 hours
+            expected_min = before + timedelta(hours=2)
+            expected_max = after + timedelta(hours=2)
+            assert expected_min <= timer_target_arg <= expected_max
+
+            # timer_target persisted in state
+            assert machine.state.timer_target is not None
+            assert expected_min <= machine.state.timer_target <= expected_max
+
+            # unsub callback stored
+            assert machine._timer_unsub is mock_unsub  # noqa: SLF001
+
+    async def test_lock_code_not_awaiting_cleaning_noop(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Lock code when phase is NOT awaiting_cleaning is no-op (FR-012)."""
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+        ) as mock_track:
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=3.0,
+            )
+            await machine.async_initialize()
+
+            await machine.async_handle_lock_code()
+
+            assert machine.phase == PHASE_OCCUPIED
+            mock_track.assert_not_called()
+
+    async def test_lock_code_when_clean_noop(self, hass: HomeAssistant) -> None:
+        """Lock code when already clean is a no-op."""
+        store = _make_mock_store(persisted_state=None)
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+        ) as mock_track:
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=3.0,
+            )
+            await machine.async_initialize()
+
+            assert machine.phase == PHASE_CLEAN
+            await machine.async_handle_lock_code()
+
+            assert machine.phase == PHASE_CLEAN
+            mock_track.assert_not_called()
+
+    async def test_lock_code_fires_callbacks(self, hass: HomeAssistant) -> None:
+        """Lock code entry fires registered callbacks."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+        ) as mock_track:
+            mock_track.return_value = MagicMock()
+
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=3.0,
+            )
+            await machine.async_initialize()
+
+            listener = MagicMock()
+            machine.register_callback(listener)
+
+            await machine.async_handle_lock_code()
+
+            listener.assert_called_once()
+
+    async def test_lock_code_preserves_dirty_since(self, hass: HomeAssistant) -> None:
+        """Lock code entry preserves dirty_since from prior state."""
+        original_dirty_since = datetime(2026, 3, 14, 10, 0, tzinfo=UTC)
+        persisted = CleanlinessState(
+            is_dirty=True,
+            phase=PHASE_AWAITING_CLEANING,
+            last_transition_at=datetime(2026, 3, 15, 12, 0, tzinfo=UTC),
+            last_transition_reason=REASON_GUEST_CHECKOUT,
+            dirty_since=original_dirty_since,
+            config_entry_id=_TEST_ENTRY_ID,
+        )
+        store = _make_mock_store(persisted_state=persisted)
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+        ) as mock_track:
+            mock_track.return_value = MagicMock()
+
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=3.0,
+            )
+            await machine.async_initialize()
+
+            await machine.async_handle_lock_code()
+
+            assert machine.state.dirty_since == original_dirty_since
+
+
+# ---------------------------------------------------------------------------
+# T030 - Cleaning duration timer
+# ---------------------------------------------------------------------------
+
+
+class TestCleaningDurationTimer:
+    """Tests for cleaning duration timer fired from async_handle_lock_code."""
+
+    async def test_timer_fires_transitions_to_clean(self, hass: HomeAssistant) -> None:
+        """Timer fires after cleaning_duration_hours, transitions to clean."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+
+        captured_cb = None
+
+        def _fake_track(
+            _hass: Any,  # noqa: ANN401
+            cb: Any,  # noqa: ANN401
+            _pt: Any,  # noqa: ANN401
+        ) -> MagicMock:
+            """Capture the timer callback."""
+            nonlocal captured_cb
+            captured_cb = cb
+            return MagicMock()
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+            side_effect=_fake_track,
+        ):
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=3.0,
+            )
+            await machine.async_initialize()
+
+            await machine.async_handle_lock_code()
+
+        assert captured_cb is not None
+
+        fire_time = datetime.now(tz=UTC) + timedelta(hours=3)
+        await captured_cb(fire_time)
+
+        assert machine.is_dirty is False
+        assert machine.phase == PHASE_CLEAN
+        assert machine.state.last_transition_reason == REASON_CLEANING_DURATION_ELAPSED
+
+    async def test_timer_target_persisted_in_state(self, hass: HomeAssistant) -> None:
+        """timer_target is persisted in state after lock code entry."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+        ) as mock_track:
+            mock_track.return_value = MagicMock()
+
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=3.0,
+            )
+            await machine.async_initialize()
+
+            await machine.async_handle_lock_code()
+
+            assert machine.state.timer_target is not None
+            # Verify the saved state dict contains the timer target
+            saved_state = store.schedule_save.call_args[0][0]
+            data = saved_state.to_dict()
+            assert data["timer_target"] is not None
+
+    async def test_timer_cancellation_on_shutdown(self, hass: HomeAssistant) -> None:
+        """Timer is cancelled on shutdown."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+        ) as mock_track:
+            mock_unsub = MagicMock()
+            mock_track.return_value = mock_unsub
+
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=3.0,
+            )
+            await machine.async_initialize()
+
+            await machine.async_handle_lock_code()
+
+            assert machine._timer_unsub is mock_unsub  # noqa: SLF001
+
+            await machine.async_shutdown()
+
+            mock_unsub.assert_called_once()
+            assert machine._timer_unsub is None  # noqa: SLF001
+
+    async def test_minimum_duration(self, hass: HomeAssistant) -> None:
+        """Minimum duration (0.05 hours = 3 minutes) is respected."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+        ) as mock_track:
+            mock_track.return_value = MagicMock()
+
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=MIN_CLEANING_DURATION_HOURS,
+            )
+            await machine.async_initialize()
+
+            before = datetime.now(tz=UTC)
+            await machine.async_handle_lock_code()
+            after = datetime.now(tz=UTC)
+
+            call_args = mock_track.call_args
+            timer_target_arg = call_args[0][2]
+
+            min_expected = before + timedelta(
+                hours=MIN_CLEANING_DURATION_HOURS,
+            )
+            max_expected = after + timedelta(
+                hours=MIN_CLEANING_DURATION_HOURS,
+            )
+            assert min_expected <= timer_target_arg <= max_expected
+
+
+# ---------------------------------------------------------------------------
+# T031 - async_mark_clean
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncMarkClean:
+    """Tests for CleanlinessStateMachine.async_mark_clean."""
+
+    async def test_dirty_awaiting_to_clean(self, hass: HomeAssistant) -> None:
+        """Any dirty phase→clean immediately via mark_clean."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        await machine.async_mark_clean()
+
+        assert machine.is_dirty is False
+        assert machine.phase == PHASE_CLEAN
+        assert machine.state.last_transition_reason == REASON_SERVICE_CALL_MARK_CLEAN
+        assert machine.state.timer_target is None
+        store.schedule_save.assert_called()
+
+    async def test_dirty_occupied_to_clean(self, hass: HomeAssistant) -> None:
+        """Mark clean from occupied phase transitions to clean."""
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        await machine.async_mark_clean()
+
+        assert machine.is_dirty is False
+        assert machine.phase == PHASE_CLEAN
+
+    async def test_mark_clean_cancels_timer(self, hass: HomeAssistant) -> None:
+        """mark_clean during being_cleaned cancels timer (FR-015)."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+
+        with patch(
+            "custom_components.turnovercal.cleanliness.async_track_point_in_time",
+        ) as mock_track:
+            mock_unsub = MagicMock()
+            mock_track.return_value = mock_unsub
+
+            machine = CleanlinessStateMachine(
+                hass=hass,
+                entry_id=_TEST_ENTRY_ID,
+                store=store,
+                cleaning_duration_hours=3.0,
+            )
+            await machine.async_initialize()
+
+            # Start cleaning timer
+            await machine.async_handle_lock_code()
+            assert machine.phase == PHASE_BEING_CLEANED
+            assert machine._timer_unsub is mock_unsub  # noqa: SLF001
+
+            # Now mark clean — should cancel the timer
+            await machine.async_mark_clean()
+
+            mock_unsub.assert_called_once()
+            assert machine._timer_unsub is None  # noqa: SLF001
+            assert machine.is_dirty is False
+            assert machine.phase == PHASE_CLEAN
+
+    async def test_mark_clean_already_clean_noop(self, hass: HomeAssistant) -> None:
+        """mark_clean when already clean is a silent no-op."""
+        store = _make_mock_store(persisted_state=None)
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        assert machine.phase == PHASE_CLEAN
+
+        # Reset call tracking after init persist
+        store.schedule_save.reset_mock()
+
+        await machine.async_mark_clean()
+
+        assert machine.phase == PHASE_CLEAN
+        # No persist call for no-op
+        store.schedule_save.assert_not_called()
+
+    async def test_mark_clean_fires_callbacks(self, hass: HomeAssistant) -> None:
+        """mark_clean fires registered callbacks."""
+        persisted = _make_dirty_state(phase=PHASE_AWAITING_CLEANING)
+        store = _make_mock_store(persisted_state=persisted)
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        listener = MagicMock()
+        machine.register_callback(listener)
+
+        await machine.async_mark_clean()
+
+        listener.assert_called_once()
+
+    async def test_mark_clean_already_clean_no_callback(
+        self, hass: HomeAssistant
+    ) -> None:
+        """mark_clean when already clean does not fire callbacks."""
+        store = _make_mock_store(persisted_state=None)
+
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        listener = MagicMock()
+        machine.register_callback(listener)
+
+        await machine.async_mark_clean()
+
+        listener.assert_not_called()
