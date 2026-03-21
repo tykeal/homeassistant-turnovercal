@@ -112,7 +112,9 @@ lifecycle.
       `MIN_CLEANING_DURATION_HOURS` (0.05) to 24, default
       `DEFAULT_CLEANING_DURATION_HOURS` (3). Add translation strings in
       `custom_components/turnovercal/strings.json` under
-      `options.step.init.data` and `options.step.init.data_description`
+      `options.step.init.data` and
+      `options.step.init.data_description`. Keep
+      `translations/en.json` in sync
 - [ ] T011 [P] Unit tests for `cleaning_duration_hours` options flow in
       `tests/test_config_flow.py` — test default value (3), minimum boundary
       (0.05), maximum boundary (24), invalid values rejected, value persisted in
@@ -164,7 +166,8 @@ newly configured property.
 - [ ] T014 [US3] Add binary sensor translation keys to
       `custom_components/turnovercal/strings.json` — add
       `entity.binary_sensor.cleanliness.name` = "Cleanliness" under the entity
-      section. Add phase attribute translation if needed
+      section. Add phase attribute translation if needed.
+      Keep `translations/en.json` in sync
 - [ ] T015 [US3] Register callback in binary sensor to update on state machine
       changes in `custom_components/turnovercal/binary_sensor.py` — the state
       machine needs a listener/callback mechanism so the binary sensor calls
@@ -404,8 +407,9 @@ to clean). Alternatively, call `mark_clean` to verify immediate transition.
       needed for these services
 - [ ] T039 [US2] Add service exception translation keys to
       `custom_components/turnovercal/strings.json` — add any new exception keys
-      needed for mark_clean/mark_dirty service validation errors (reuse existing
-      keys where possible)
+      needed for mark_clean/mark_dirty service validation
+      errors (reuse existing keys where possible). Keep
+      `translations/en.json` in sync
 
 **Checkpoint**: Full dirty→clean lifecycle works: check-in marks dirty, lock
 code starts cleaning timer, timer auto-transitions to clean OR mark_clean
