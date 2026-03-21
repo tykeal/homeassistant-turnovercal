@@ -245,7 +245,8 @@ class CleanlinessStateMachine:
             coverage_checker: Optional async callable that checks
                 whether a turnover event covers a given checkout time.
             fallback_creator: Optional async callable that creates a
-                fallback turnover event for a given checkout time.
+                fallback turnover event for a given checkout time
+                and returns the event's UID.
 
         """
         self._hass = hass

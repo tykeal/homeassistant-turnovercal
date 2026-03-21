@@ -326,15 +326,13 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         naive_uids: set[str] = set()
         for ev in rc_events:
             uid = getattr(ev, "uid", None)
-            ev_start = ev.start
-            ev_end = ev.end
-            if (
-                not uid
-                or not isinstance(ev_start, datetime)
-                or not isinstance(ev_end, datetime)
-            ):
+            if not uid:
                 continue
             present_uids.add(uid)
+            ev_start = ev.start
+            ev_end = ev.end
+            if not isinstance(ev_start, datetime) or not isinstance(ev_end, datetime):
+                continue
             if ev_start.tzinfo is None or ev_end.tzinfo is None:
                 naive_uids.add(uid)
                 _LOGGER.debug(
