@@ -77,6 +77,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         lock_entity_id: str | None = None,
         cleaning_code_slot: int = 0,
         grace_hours: int = DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
+        config_entry_id: str | None = None,
     ) -> None:
         """Initialize the coordinator.
 
@@ -92,6 +93,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             lock_entity_id: Keymaster lock entity to monitor.
             cleaning_code_slot: Lock code slot for cleaning staff.
             grace_hours: Early-unlock grace period in hours.
+            config_entry_id: Config entry ID for cleanliness lookup.
 
         """
         super().__init__(
@@ -109,6 +111,8 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         self._lock_entity_id = lock_entity_id
         self._cleaning_code_slot = cleaning_code_slot
         self._grace_hours = grace_hours
+        self._config_entry_id = config_entry_id
+        self._previous_active_stays: dict[str, tuple[datetime, datetime]] = {}
 
     @property
     def calendar_entity_id(self) -> str:
@@ -156,6 +160,8 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             )
             return self._cache.get_events()
 
+        await self._async_detect_midstay_cancellations(rc_events, now)
+
         try:
             computed = compute_turnover_events(
                 events=rc_events,
@@ -196,12 +202,9 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         for uid in list(cached.keys()):
             if uid not in new_events:
                 cached_evt = cached[uid]
-                # Preserve lock-adjusted events even if their source
-                # booking was removed — the cleaner already confirmed.
-                if cached_evt.adjusted_by_lock:
+                if self._should_preserve(cached_evt, now):
                     continue
-                if cached_evt.dtend > now:
-                    await self._cache.async_remove_event(uid)
+                await self._cache.async_remove_event(uid)
 
         for evt in new_events.values():
             existing = cached.get(evt.uid)
@@ -212,6 +215,109 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
                     continue
                 if not _event_changed(existing, evt):
                     continue
+            await self._cache.async_add_event(evt)
+
+    @staticmethod
+    def _should_preserve(
+        cached_evt: TurnoverEvent,
+        now: datetime,
+    ) -> bool:
+        """Check whether a cached event should be preserved.
+
+        Events are preserved when they are lock-adjusted,
+        created from a mid-stay cancellation, or already in
+        the past.
+
+        Args:
+            cached_evt: The cached event to evaluate.
+            now: Current local time for past/future split.
+
+        Returns:
+            True if the event should be kept in cache.
+
+        """
+        if cached_evt.adjusted_by_lock:
+            return True
+        if cached_evt.created_from_midstay_cancellation:
+            return True
+        return cached_evt.dtend <= now
+
+    async def _async_detect_midstay_cancellations(
+        self,
+        rc_events: list[CalendarEvent],
+        now: datetime,
+    ) -> None:
+        """Detect reservations that disappeared mid-stay.
+
+        Compares the current set of active stays (check-in <= now
+        <= check-out) against the previous poll.  When a reservation
+        disappears while its stay period overlaps the current time,
+        the cleanliness state machine is notified so it can mark the
+        property dirty.
+
+        Pre-arrival cancellations (check-in > now) are excluded per
+        FR-011.
+
+        Args:
+            rc_events: Raw RC calendar events from the current poll.
+            now: Current local time.
+
+        """
+        current_active: dict[str, tuple[datetime, datetime]] = {}
+        for ev in rc_events:
+            uid = getattr(ev, "uid", None)
+            ev_start = ev.start
+            ev_end = ev.end
+            if (
+                uid
+                and isinstance(ev_start, datetime)
+                and isinstance(ev_end, datetime)
+                and ev_start <= now <= ev_end
+            ):
+                current_active[uid] = (ev_start, ev_end)
+
+        if self._previous_active_stays:
+            for uid, (start, _end) in self._previous_active_stays.items():
+                if uid not in current_active and start <= now:
+                    await self._async_fire_midstay_cancellation(
+                        start,
+                    )
+
+        self._previous_active_stays = current_active
+
+    async def _async_fire_midstay_cancellation(
+        self,
+        check_in_time: datetime,
+    ) -> None:
+        """Notify the cleanliness state machine of a mid-stay cancel.
+
+        Looks up the cleanliness state machine via ``hass.data`` and
+        calls ``async_handle_midstay_cancellation``.  After the call,
+        any newly created cache events are flagged as mid-stay
+        cancellation events so ``_merge_events`` preserves them.
+
+        Args:
+            check_in_time: Original check-in time of the cancelled
+                reservation.
+
+        """
+        if self._config_entry_id is None:
+            return
+
+        domain_data = self.hass.data.get(DOMAIN, {})
+        entry_data = domain_data.get(self._config_entry_id, {})
+        cleanliness = entry_data.get("cleanliness")
+        if cleanliness is None:
+            return
+
+        before_uids = set(self._cache.get_events().keys())
+        await cleanliness.async_handle_midstay_cancellation(
+            check_in_time,
+        )
+        after = self._cache.get_events()
+        for new_uid in set(after.keys()) - before_uids:
+            evt = after[new_uid]
+            evt.created_from_midstay_cancellation = True
             await self._cache.async_add_event(evt)
 
     @staticmethod

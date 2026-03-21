@@ -24,6 +24,7 @@ from custom_components.turnovercal.const import (
     REASON_CLEANING_DURATION_ELAPSED,
     REASON_GUEST_CHECKIN,
     REASON_GUEST_CHECKOUT,
+    REASON_MID_STAY_CANCELLATION,
     REASON_STARTUP_RECONCILIATION,
 )
 
@@ -450,6 +451,53 @@ class CleanlinessStateMachine:
             associated_checkout_time=(self._state.associated_checkout_time),
             config_entry_id=self._entry_id,
         )
+        self._persist()
+        self._fire_callbacks()
+
+    async def async_handle_midstay_cancellation(
+        self,
+        check_in_time: datetime,
+    ) -> None:
+        """Handle a mid-stay reservation cancellation.
+
+        Transitions the property to dirty with
+        ``phase=PHASE_AWAITING_CLEANING`` and
+        ``reason=REASON_MID_STAY_CANCELLATION``.  Creates an immediate
+        cleaning event via the ``fallback_creator`` delegate.
+
+        No-op when the check-in time has not yet passed (pre-arrival
+        cancellation per FR-011) or when the property is already dirty
+        (FR-025).
+
+        Args:
+            check_in_time: The original check-in time of the cancelled
+                reservation.
+
+        """
+        assert self._state is not None  # noqa: S101
+
+        now = datetime.now(tz=_UTC)
+
+        # FR-011: pre-arrival cancellation -- check-in not yet passed
+        if check_in_time > now:
+            return
+
+        # FR-025: already dirty -- no duplicate cleaning event
+        if self._state.is_dirty:
+            return
+
+        self._state = CleanlinessState(
+            is_dirty=True,
+            phase=PHASE_AWAITING_CLEANING,
+            last_transition_at=now,
+            last_transition_reason=REASON_MID_STAY_CANCELLATION,
+            dirty_since=now,
+            config_entry_id=self._entry_id,
+        )
+
+        if self._fallback_creator is not None:
+            await self._fallback_creator(now)
+
         self._persist()
         self._fire_callbacks()
 

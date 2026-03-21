@@ -20,6 +20,7 @@ from custom_components.turnovercal.const import (
     DEFAULT_SUMMARY_PREFIX,
     DEFAULT_TRAILING_DURATION_HOURS,
     DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
     EVENT_KEYMASTER,
 )
 from custom_components.turnovercal.coordinator import TurnoverCoordinator
@@ -599,6 +600,7 @@ def _make_event(  # noqa: PLR0913
         source_checkout_id="src-001",
         source_checkin_id=None if is_trailing else "src-002",
         created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+        is_trailing=is_trailing,
     )
 
 
@@ -1055,3 +1057,304 @@ class TestCoordinatorPreservesAdjustments:
             await coordinator._async_update_data()  # noqa: SLF001
 
         cache.async_remove_event.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# T041: Tests for mid-stay cancellation reservation comparison
+# ---------------------------------------------------------------------------
+
+
+def _make_coordinator_with_entry(
+    hass: HomeAssistant,
+    cache: MagicMock,
+    *,
+    rc_events: list[CalendarEvent] | None = None,
+    config_entry_id: str = "test_entry_123",
+) -> TurnoverCoordinator:
+    """Create a TurnoverCoordinator with config_entry_id."""
+    mock_entity = MagicMock()
+    mock_entity.async_get_events = AsyncMock(
+        return_value=rc_events if rc_events is not None else [],
+    )
+    return TurnoverCoordinator(
+        hass=hass,
+        calendar_entity=mock_entity,
+        cache=cache,
+        summary_prefix=DEFAULT_SUMMARY_PREFIX,
+        property_name="Beach House",
+        trailing_duration_hours=DEFAULT_TRAILING_DURATION_HOURS,
+        timezone_str="America/New_York",
+        update_interval=timedelta(minutes=DEFAULT_UPDATE_INTERVAL),
+        config_entry_id=config_entry_id,
+    )
+
+
+class TestMidstayCancellationDetection:
+    """Tests for reservation comparison detecting mid-stay cancellations."""
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_reservation_removed_during_stay_triggers(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Reservation disappearing mid-stay triggers cancellation."""
+        now = datetime(2026, 3, 15, 14, 0, tzinfo=ET)
+        stay_start = now - timedelta(hours=4)
+        stay_end = now + timedelta(hours=20)
+
+        active_event = CalendarEvent(
+            start=stay_start,
+            end=stay_end,
+            summary="Guest A",
+            uid="rc-stay-001",
+        )
+
+        cache = _make_cache_mock()
+        coordinator = _make_coordinator_with_entry(
+            hass,
+            cache,
+            rc_events=[active_event],
+        )
+
+        mock_cleanliness = AsyncMock()
+        mock_cleanliness.async_handle_midstay_cancellation = AsyncMock()
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["test_entry_123"] = {
+            "cleanliness": mock_cleanliness,
+        }
+
+        # First poll: establishes the active stays
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        # Second poll: reservation gone
+        with (
+            patch.object(
+                coordinator._calendar_entity,  # noqa: SLF001
+                "async_get_events",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                return_value=[],
+            ),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        mock_cleanliness.async_handle_midstay_cancellation.assert_awaited_once_with(
+            stay_start,
+        )
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_reservation_removed_before_checkin_no_trigger(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Reservation removed before check-in does not trigger."""
+        now = datetime(2026, 3, 15, 14, 0, tzinfo=ET)
+        future_start = now + timedelta(days=2)
+        future_end = now + timedelta(days=5)
+
+        future_event = CalendarEvent(
+            start=future_start,
+            end=future_end,
+            summary="Guest B",
+            uid="rc-stay-002",
+        )
+
+        cache = _make_cache_mock()
+        coordinator = _make_coordinator_with_entry(
+            hass,
+            cache,
+            rc_events=[future_event],
+        )
+
+        mock_cleanliness = AsyncMock()
+        mock_cleanliness.async_handle_midstay_cancellation = AsyncMock()
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["test_entry_123"] = {
+            "cleanliness": mock_cleanliness,
+        }
+
+        # First poll
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        # Second poll: reservation gone (pre-arrival)
+        with (
+            patch.object(
+                coordinator._calendar_entity,  # noqa: SLF001
+                "async_get_events",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                return_value=[],
+            ),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        mock_cleanliness.async_handle_midstay_cancellation.assert_not_awaited()
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_reservation_removed_after_checkout_no_trigger(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Reservation removed after check-out does not trigger."""
+        now = datetime(2026, 3, 15, 14, 0, tzinfo=ET)
+        past_start = now - timedelta(days=5)
+        past_end = now - timedelta(days=2)
+
+        past_event = CalendarEvent(
+            start=past_start,
+            end=past_end,
+            summary="Guest C",
+            uid="rc-stay-003",
+        )
+
+        cache = _make_cache_mock()
+        coordinator = _make_coordinator_with_entry(
+            hass,
+            cache,
+            rc_events=[past_event],
+        )
+
+        mock_cleanliness = AsyncMock()
+        mock_cleanliness.async_handle_midstay_cancellation = AsyncMock()
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["test_entry_123"] = {
+            "cleanliness": mock_cleanliness,
+        }
+
+        # First poll
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        # Second poll: past reservation removed
+        with (
+            patch.object(
+                coordinator._calendar_entity,  # noqa: SLF001
+                "async_get_events",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "custom_components.turnovercal.coordinator.compute_turnover_events",
+                return_value=[],
+            ),
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        mock_cleanliness.async_handle_midstay_cancellation.assert_not_awaited()
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_first_poll_does_not_trigger(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """First poll with no previous data does not trigger."""
+        now = datetime(2026, 3, 15, 14, 0, tzinfo=ET)
+        active_event = CalendarEvent(
+            start=now - timedelta(hours=4),
+            end=now + timedelta(hours=20),
+            summary="Guest A",
+            uid="rc-stay-001",
+        )
+
+        cache = _make_cache_mock()
+        coordinator = _make_coordinator_with_entry(
+            hass,
+            cache,
+            rc_events=[active_event],
+        )
+
+        mock_cleanliness = AsyncMock()
+        mock_cleanliness.async_handle_midstay_cancellation = AsyncMock()
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["test_entry_123"] = {
+            "cleanliness": mock_cleanliness,
+        }
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        mock_cleanliness.async_handle_midstay_cancellation.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# T044: Tests for preserving mid-stay cancellation events in merge
+# ---------------------------------------------------------------------------
+
+
+class TestPreserveMidstayCancellationEvents:
+    """Tests for preserving mid-stay cancellation cleaning events."""
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_midstay_event_preserved_when_source_removed(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Mid-stay cancellation event survives source disappearing."""
+        midstay_event = _make_event(
+            15,
+            14,
+            15,
+            18,
+            is_trailing=True,
+        )
+        midstay_event.created_from_midstay_cancellation = True
+
+        cache = _make_cache_mock(
+            {midstay_event.uid: midstay_event},
+        )
+        coordinator = _make_coordinator(hass, cache)
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        cache.async_remove_event.assert_not_called()
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_regular_future_event_still_removed(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Regular (non-midstay) future event is removed normally."""
+        regular_event = _make_event(
+            20,
+            11,
+            20,
+            15,
+            is_trailing=True,
+        )
+        assert not regular_event.created_from_midstay_cancellation
+
+        cache = _make_cache_mock(
+            {regular_event.uid: regular_event},
+        )
+        coordinator = _make_coordinator(hass, cache)
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        cache.async_remove_event.assert_called_once_with(
+            regular_event.uid,
+        )
