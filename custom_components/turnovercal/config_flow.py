@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
@@ -673,6 +674,7 @@ class TurnoverCalOptionsFlow(OptionsFlow):
         if (
             isinstance(cleaning_dur, bool)
             or not isinstance(cleaning_dur, (int, float))
+            or not math.isfinite(cleaning_dur)
             or cleaning_dur < MIN_CLEANING_DURATION_HOURS
             or cleaning_dur > _max_cleaning_dur
         ):
