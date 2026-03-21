@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: 2026 Andrew Grimberg <tykeal@bardicgrove.org>
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Specification Quality Checklist: Property Cleanliness State Tracking
+# Requirements Checklist: Property Cleanliness State Tracking
 
 **Purpose**: Validate specification completeness
 and quality before proceeding to planning.

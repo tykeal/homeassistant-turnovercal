@@ -455,15 +455,17 @@ restarting the integration, and verifying the binary sensor still reads "on"
   property is dirty and no existing turnover covers the cleaning need.
   Distinguished from regular turnover events and trailing events. Linked to the
   dirty state rather than to a specific booking pair. Preserved across polling
-  cycles until the property is cleaned or the event expires.
+  cycles until the property is cleaned.
 - **Binary Sensor Entity**: The user-facing representation of the cleanliness
   state. Belongs to the same device as the existing calendar and sensor
   entities. Exposes state attributes for dashboard display and automation
   triggers, including a `phase` attribute (`occupied`, `awaiting_cleaning`,
   `being_cleaned`, `clean`) to distinguish sub-states within the dirty/cleaning
-  lifecycle. The full phase lifecycle is as defined
-  in **FR-022b**, including the cyclic `clean` →
-  `occupied` transition.
+  lifecycle. Phase values and the cyclic `clean` →
+  `occupied` check-in transition are defined in
+  **FR-022a**; post-check-out/dirty/cleaning
+  transitions are defined in **FR-022b** and together
+  these define the full phase lifecycle.
 
 ### Assumptions
 
