@@ -27,6 +27,7 @@ from custom_components.turnovercal.const import (
     PHASE_BEING_CLEANED,
     PHASE_CLEAN,
     PHASE_OCCUPIED,
+    REASON_DISPLAY,
 )
 
 if TYPE_CHECKING:
@@ -183,7 +184,9 @@ class TurnoverCalCleanlinessSensor(RestoreEntity, SensorEntity):
         state = self._state_machine.state
         return {
             "last_transition_at": state.last_transition_at.isoformat(),
-            "last_transition_reason": state.last_transition_reason,
+            "last_transition_reason": REASON_DISPLAY.get(
+                state.last_transition_reason, state.last_transition_reason
+            ),
             "dirty_since": (
                 state.dirty_since.isoformat() if state.dirty_since is not None else None
             ),

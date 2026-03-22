@@ -24,6 +24,7 @@ from custom_components.turnovercal.const import (
     PHASE_CLEAN,
     PHASE_OCCUPIED,
     REASON_CLEANING_DURATION_ELAPSED,
+    REASON_DISPLAY,
     REASON_GUEST_CHECKIN,
 )
 from custom_components.turnovercal.sensor import (
@@ -228,7 +229,10 @@ class TestCleanlinessSensorExtraAttributes:
         attrs = sensor.extra_state_attributes
         assert attrs is not None
         assert attrs["last_transition_at"] == now.isoformat()
-        assert attrs["last_transition_reason"] == REASON_CLEANING_DURATION_ELAPSED
+        assert (
+            attrs["last_transition_reason"]
+            == REASON_DISPLAY[REASON_CLEANING_DURATION_ELAPSED]
+        )
         assert attrs["dirty_since"] is None
         assert attrs["timer_target"] is None
 
