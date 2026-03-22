@@ -106,7 +106,7 @@ accordingly.
 
 ---
 
-### User Story 3 - Binary Sensor Visibility on Dashboard (Priority: P1)
+### User Story 3 - Enum Sensor Visibility on Dashboard (Priority: P1)
 
 As a property manager with multiple vacation rentals, I want each property to
 have an enum sensor showing the cleanliness phase, so that I can build a
@@ -129,13 +129,13 @@ correct phase states matching the property's cleanliness.
    with other TurnoverCal entities (for example,
    `sensor.<property>_cleanliness`, derived from the
    config entry title and a `cleanliness` translation key).
-2. **Given** a property in the "dirty" state, **When** viewing the binary
-   sensor, **Then** the state reads "on" and additional context attributes
-   include when the state last changed, the reason for the transition, and the
-   current `phase` (`occupied`, `awaiting_cleaning`, or `being_cleaned`).
-3. **Given** a property in the "clean" state, **When** viewing the binary
-   sensor, **Then** the state reads "off" and the `phase` attribute reports
-   `clean`.
+2. **Given** a property in a dirty state, **When** viewing the enum
+   sensor, **Then** the state reads the current phase (one of `occupied`,
+   `awaiting_cleaning`, or `being_cleaned`) and additional context
+   attributes include when the state last changed and the reason for
+   the transition.
+3. **Given** a property in the "clean" state, **When** viewing the enum
+   sensor, **Then** the state reads `clean`.
 
 ---
 

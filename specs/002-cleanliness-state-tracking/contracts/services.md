@@ -167,7 +167,6 @@ can trigger on:
 
 - `sensor.<config_entry_title_slug>_cleanliness` → phase changes
   (e.g., `clean` → `occupied`, `awaiting_cleaning` → `being_cleaned`)
-- Attribute change on `phase` (e.g., `awaiting_cleaning` → `being_cleaned`)
 
 ---
 

@@ -10,7 +10,6 @@ cleanliness lifecycle phase.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
@@ -42,8 +41,6 @@ if TYPE_CHECKING:
     from custom_components.turnovercal.cleanliness import (
         CleanlinessStateMachine,
     )
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
