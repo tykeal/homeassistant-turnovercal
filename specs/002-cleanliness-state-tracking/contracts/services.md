@@ -98,12 +98,12 @@ target:
 
 ### Behavior
 
-| Current State       | Result                              |
-| ------------------- | ----------------------------------- |
-| `clean`             | No-op. Already clean.               |
-| `occupied`          | → clean. Sensor state: clean.       |
-| `awaiting_cleaning` | → clean. Sensor state: clean.       |
-| `being_cleaned`     | → clean. Cancels timer.             |
+| Current State       | Result                                        |
+| ------------------- | --------------------------------------------- |
+| `clean`             | No-op. Already clean.                         |
+| `occupied`          | → clean. Sensor state: clean.                 |
+| `awaiting_cleaning` | → clean. Sensor state: clean.                 |
+| `being_cleaned`     | → clean. Cancels timer. Sensor state: clean.  |
 
 ### Responses (mark_clean)
 

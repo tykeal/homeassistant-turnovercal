@@ -420,7 +420,7 @@ restarting the integration, and verifying the binary sensor still reads "on"
   (ISO 8601 or null indicating when the current dirty period started),
   and `timer_target` (ISO 8601 or null indicating the auto-clean timer
   deadline).
-- **FR-032**: The `phase` attribute MUST report one of exactly four values:
+- **FR-032**: The enum sensor state MUST be one of exactly four values:
   `occupied` when a guest is actively staying (between check-in and check-out),
   `awaiting_cleaning` after the guest checks out while the property remains
   dirty and no cleaner has started, `being_cleaned` after a cleaning lock code
@@ -430,16 +430,16 @@ restarting the integration, and verifying the binary sensor still reads "on"
   `clean` → `occupied` → `awaiting_cleaning` →
   `being_cleaned` → `clean`.
 - **FR-033**: On detection of a guest check-out event (while the property is
-  dirty), the system MUST transition the `phase` attribute from `occupied` to
-  `awaiting_cleaning`. On a mid-stay cancellation dirty trigger, the `phase`
+  dirty), the system MUST transition the enum sensor state from `occupied` to
+  `awaiting_cleaning`. On a mid-stay cancellation dirty trigger, the state
   MUST be set to `awaiting_cleaning` (the guest's stay is terminated). On a
-  `mark_dirty` service call when no guest is actively staying, the `phase` MUST
+  `mark_dirty` service call when no guest is actively staying, the state MUST
   be set to `awaiting_cleaning`. On detection of a cleaning lock code entry
-  (while phase is `awaiting_cleaning`), the system MUST transition the `phase`
+  (while state is `awaiting_cleaning`), the system MUST transition the state
   to `being_cleaned`. On cleaning duration timer expiration, the system MUST
-  transition the `phase` to `clean`. The `awaiting_cleaning` phase is the
+  transition the state to `clean`. The `awaiting_cleaning` state is the
   canonical value for all dirty-but-no-cleaner-started states; the
-  `being_cleaned` phase indicates active cleaning in progress.
+  `being_cleaned` state indicates active cleaning in progress.
 - **FR-034**: The enum sensor entity ID MUST be derived
   using this integration's standard naming convention
   (config entry title + translation key) rather than
