@@ -65,5 +65,17 @@ REASON_SERVICE_CALL_MARK_CLEAN = "service_call_mark_clean"
 REASON_SERVICE_CALL_MARK_DIRTY = "service_call_mark_dirty"
 REASON_STARTUP_RECONCILIATION = "startup_reconciliation"
 
+# Human-readable labels for transition reasons (extra_state_attributes)
+REASON_DISPLAY: dict[str, str] = {
+    REASON_GUEST_CHECKIN: "Guest check-in",
+    REASON_GUEST_CHECKOUT: "Guest check-out",
+    REASON_MID_STAY_CANCELLATION: "Mid-stay cancellation",
+    REASON_LOCK_CODE_ENTRY: "Lock code entry",
+    REASON_CLEANING_DURATION_ELAPSED: "Cleaning duration elapsed",
+    REASON_SERVICE_CALL_MARK_CLEAN: "Marked clean via service",
+    REASON_SERVICE_CALL_MARK_DIRTY: "Marked dirty via service",
+    REASON_STARTUP_RECONCILIATION: "Startup reconciliation",
+}
+
 # Cleanliness store
 CLEANLINESS_STORE_VERSION = 1

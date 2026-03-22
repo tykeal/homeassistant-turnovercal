@@ -228,7 +228,7 @@ class TestCleanlinessSensorExtraAttributes:
         attrs = sensor.extra_state_attributes
         assert attrs is not None
         assert attrs["last_transition_at"] == now.isoformat()
-        assert attrs["last_transition_reason"] == REASON_CLEANING_DURATION_ELAPSED
+        assert attrs["last_transition_reason"] == "Cleaning duration elapsed"
         assert attrs["dirty_since"] is None
         assert attrs["timer_target"] is None
 
@@ -286,6 +286,23 @@ class TestCleanlinessSensorExtraAttributes:
             "timer_target",
         }
         assert set(attrs.keys()) == expected_keys
+
+    def test_unknown_reason_falls_back_to_raw(self) -> None:
+        """Unknown reason constants pass through unchanged."""
+        now = datetime(2026, 6, 1, 10, 0, tzinfo=UTC)
+        state = CleanlinessState(
+            is_dirty=False,
+            phase=PHASE_CLEAN,
+            last_transition_at=now,
+            last_transition_reason="future_unknown_reason",
+            config_entry_id=_TEST_ENTRY_ID,
+        )
+        machine = _make_mock_state_machine(state=state)
+        entry = _StubEntry()
+        sensor = TurnoverCalCleanlinessSensor(entry, machine)  # type: ignore[arg-type]
+
+        attrs = sensor.extra_state_attributes
+        assert attrs["last_transition_reason"] == "future_unknown_reason"
 
 
 # ---------------------------------------------------------------------------
