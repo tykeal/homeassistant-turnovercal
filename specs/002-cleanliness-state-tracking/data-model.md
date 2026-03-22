@@ -16,22 +16,20 @@ Represents the four-phase lifecycle of a property's cleanliness state.
 
 | Value                | Description                                        |
 |----------------------|----------------------------------------------------|
-| `clean`              | Property is ready for guests (binary sensor: off)  |
-| `occupied`           | Guest is actively staying (binary sensor: on)      |
+| `clean`              | Property is ready for guests (enum sensor: clean)  |
+| `occupied`           | Guest is actively staying (enum sensor: occupied)  |
 | `awaiting_cleaning`  | Post-check-out or manual dirty, no cleaner started |
 | `being_cleaned`      | Cleaner lock code used, timer running              |
 
 **Constraints**:
 
 - Exactly four values; no extensions without spec amendment.
-- `clean` is the only phase where the binary sensor reports "off."
-- Phases `occupied`, `awaiting_cleaning`, and `being_cleaned` all report
-  the binary sensor as "on" (dirty).
+- The enum sensor state directly reports the current phase string.
 
 ### TransitionReason (Enum/Literal)
 
 Documents why a state transition occurred. Stored as a string attribute
-on the binary sensor and in the persisted state.
+on the enum sensor and in the persisted state.
 
 | Value                       | Trigger                         |
 | --------------------------- | ------------------------------- |
@@ -225,7 +223,7 @@ ConfigEntry (1) ──── (1) TurnoverCoordinator
      │
      ├── (1) TurnoverCalCalendarEntity (CoordinatorEntity)
      ├── (1) TurnoverCalFeedUrlSensor
-     └── (1) TurnoverCalCleanlinessSensor (RestoreEntity + BinarySensorEntity)
+     └── (1) TurnoverCalCleanlinessSensor (RestoreEntity + SensorEntity)
 ```
 
 ## New Module Breakdown
@@ -236,12 +234,13 @@ ConfigEntry (1) ──── (1) TurnoverCoordinator
 |                         | `CleanlinessState` dataclass, |
 |                         | `CleanlinessStateMachine`     |
 | `cleanliness_store.py`  | HA Store wrapper              |
-| `binary_sensor.py`      | `TurnoverCalCleanlinessSensor`|
+| `sensor.py`             | `TurnoverCalCleanlinessSensor`|
+|                         | + `TurnoverCalFeedUrlSensor`  |
 | `services.py` (ext.)    | `mark_dirty`/`mark_clean` +   |
 |                         | resolver extension            |
 | `coordinator.py` (ext.) | State machine ownership, RC   |
 |                         | event integration             |
-| `__init__.py` (ext.)    | Binary sensor platform setup, |
+| `__init__.py` (ext.)    | Sensor platform setup,        |
 |                         | RC listeners, store init      |
 | `config_flow.py` (ext.) | `cleaning_duration_hours` opt |
 | `const.py` (ext.)       | Phase/event/default constants |

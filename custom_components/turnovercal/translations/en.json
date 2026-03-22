@@ -91,11 +91,6 @@
     }
   },
   "entity": {
-    "binary_sensor": {
-      "dirty": {
-        "name": "Cleanliness"
-      }
-    },
     "calendar": {
       "turnover_calendar": {
         "name": "Turnover calendar"
@@ -104,6 +99,15 @@
     "sensor": {
       "feed_url": {
         "name": "Feed URL"
+      },
+      "cleanliness": {
+        "name": "Cleanliness",
+        "state": {
+          "clean": "Clean",
+          "occupied": "Occupied",
+          "awaiting_cleaning": "Awaiting cleaning",
+          "being_cleaned": "Being cleaned"
+        }
       }
     }
   },

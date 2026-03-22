@@ -504,11 +504,11 @@ class TestHandleMarkClean:
         await _handle_mark_clean(call)
         mock_machine.async_mark_clean.assert_awaited_once()
 
-    async def test_binary_sensor_entity_targeting(
+    async def test_sensor_entity_targeting(
         self,
         hass: HomeAssistant,
     ) -> None:
-        """Service call via binary_sensor entity resolves correctly."""
+        """Service call via sensor entity resolves correctly."""
         coord = _make_coordinator()
         mock_machine = MagicMock()
         mock_machine.async_mark_clean = AsyncMock()
@@ -516,13 +516,13 @@ class TestHandleMarkClean:
             _ENTRY_ID: {
                 "coordinator": coord,
                 "cleanliness": mock_machine,
-                "binary_sensor_entity_id": ("binary_sensor.turnovercal_dirty"),
+                "sensor_entity_id": ("sensor.turnovercal_cleanliness"),
             },
         }
         call = _make_service_call(
             hass,
             target={
-                "entity_id": ("binary_sensor.turnovercal_dirty"),
+                "entity_id": ("sensor.turnovercal_cleanliness"),
             },
         )
         await _handle_mark_clean(call)
@@ -551,14 +551,14 @@ class TestMarkCleanServiceContract:
         assert "mark_clean" in data
 
     def test_mark_clean_target(self) -> None:
-        """mark_clean targets calendar and binary_sensor."""
+        """mark_clean targets calendar and sensor."""
         svc = self._load_yaml()["mark_clean"]
         target = svc["target"]
         entity = target["entity"]
         assert entity["integration"] == "turnovercal"
         domain = entity["domain"]
         assert "calendar" in domain
-        assert "binary_sensor" in domain
+        assert "sensor" in domain
 
     def test_mark_clean_name(self) -> None:
         """mark_clean has name and description."""
@@ -572,14 +572,14 @@ class TestMarkCleanServiceContract:
         assert "mark_dirty" in data
 
     def test_mark_dirty_target(self) -> None:
-        """mark_dirty targets calendar and binary_sensor."""
+        """mark_dirty targets calendar and sensor."""
         svc = self._load_yaml()["mark_dirty"]
         target = svc["target"]
         entity = target["entity"]
         assert entity["integration"] == "turnovercal"
         domain = entity["domain"]
         assert "calendar" in domain
-        assert "binary_sensor" in domain
+        assert "sensor" in domain
 
 
 # -------------------------------------------------------------------
@@ -642,11 +642,11 @@ class TestHandleMarkDirty:
         await _handle_mark_dirty(call)
         mock_machine.async_mark_dirty.assert_awaited_once()
 
-    async def test_binary_sensor_entity_targeting(
+    async def test_sensor_entity_targeting(
         self,
         hass: HomeAssistant,
     ) -> None:
-        """Service call via binary_sensor entity resolves."""
+        """Service call via sensor entity resolves."""
         coord = _make_coordinator()
         mock_machine = MagicMock()
         mock_machine.async_mark_dirty = AsyncMock()
@@ -654,13 +654,13 @@ class TestHandleMarkDirty:
             _ENTRY_ID: {
                 "coordinator": coord,
                 "cleanliness": mock_machine,
-                "binary_sensor_entity_id": ("binary_sensor.turnovercal_dirty"),
+                "sensor_entity_id": ("sensor.turnovercal_cleanliness"),
             },
         }
         call = _make_service_call(
             hass,
             target={
-                "entity_id": ("binary_sensor.turnovercal_dirty"),
+                "entity_id": ("sensor.turnovercal_cleanliness"),
             },
         )
         await _handle_mark_dirty(call)

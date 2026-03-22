@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2025 Andrew Grimberg <tykeal@bardicgrove.org>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for TurnoverCalCleanlinessSensor binary sensor entity."""
+"""Tests for TurnoverCalCleanlinessSensor enum sensor entity."""
 
 from __future__ import annotations
 
@@ -11,12 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
-from homeassistant.components.binary_sensor import BinarySensorDeviceClass
+from homeassistant.components.sensor import SensorDeviceClass
 
-from custom_components.turnovercal.binary_sensor import (
-    TurnoverCalCleanlinessSensor,
-    async_setup_entry,
-)
 from custom_components.turnovercal.cleanliness import (
     CleanlinessState,
     CleanlinessStateMachine,
@@ -29,6 +25,10 @@ from custom_components.turnovercal.const import (
     PHASE_OCCUPIED,
     REASON_CLEANING_DURATION_ELAPSED,
     REASON_GUEST_CHECKIN,
+)
+from custom_components.turnovercal.sensor import (
+    TurnoverCalCleanlinessSensor,
+    async_setup_entry,
 )
 
 if TYPE_CHECKING:
@@ -115,21 +115,34 @@ class TestCleanlinessSensorAttributes:
 
         assert sensor.unique_id == "my-entry-42_cleanliness"
 
-    def test_device_class_is_problem(self) -> None:
-        """Device class is PROBLEM."""
+    def test_device_class_is_enum(self) -> None:
+        """Device class is ENUM."""
         entry = _StubEntry()
         machine = _make_mock_state_machine()
         sensor = TurnoverCalCleanlinessSensor(entry, machine)  # type: ignore[arg-type]
 
-        assert sensor.device_class == BinarySensorDeviceClass.PROBLEM
+        assert sensor.device_class == SensorDeviceClass.ENUM
 
-    def test_translation_key_is_dirty(self) -> None:
-        """Translation key is 'dirty'."""
+    def test_translation_key_is_cleanliness(self) -> None:
+        """Translation key is 'cleanliness'."""
         entry = _StubEntry()
         machine = _make_mock_state_machine()
         sensor = TurnoverCalCleanlinessSensor(entry, machine)  # type: ignore[arg-type]
 
-        assert sensor.translation_key == "dirty"
+        assert sensor.translation_key == "cleanliness"
+
+    def test_options_list(self) -> None:
+        """Options contain all valid phase strings."""
+        entry = _StubEntry()
+        machine = _make_mock_state_machine()
+        sensor = TurnoverCalCleanlinessSensor(entry, machine)  # type: ignore[arg-type]
+
+        assert sensor.options == [
+            PHASE_CLEAN,
+            PHASE_OCCUPIED,
+            PHASE_AWAITING_CLEANING,
+            PHASE_BEING_CLEANED,
+        ]
 
     def test_has_entity_name(self) -> None:
         """Entity uses the has_entity_name pattern."""
@@ -157,43 +170,43 @@ class TestCleanlinessSensorAttributes:
 
 
 class TestCleanlinessSensorState:
-    """Tests for is_on reflecting cleanliness state machine."""
+    """Tests for native_value reflecting cleanliness phase."""
 
-    def test_is_on_when_dirty(self) -> None:
-        """Sensor is 'on' (problem detected) when property is dirty."""
+    def test_native_value_awaiting_cleaning(self) -> None:
+        """Sensor reports awaiting_cleaning phase."""
         dirty_state = _make_dirty_state()
         machine = _make_mock_state_machine(state=dirty_state)
         entry = _StubEntry()
         sensor = TurnoverCalCleanlinessSensor(entry, machine)  # type: ignore[arg-type]
 
-        assert sensor.is_on is True
+        assert sensor.native_value == PHASE_AWAITING_CLEANING
 
-    def test_is_off_when_clean(self) -> None:
-        """Sensor is 'off' (no problem) when property is clean."""
+    def test_native_value_clean(self) -> None:
+        """Sensor reports clean phase."""
         clean_state = _make_clean_state()
         machine = _make_mock_state_machine(state=clean_state)
         entry = _StubEntry()
         sensor = TurnoverCalCleanlinessSensor(entry, machine)  # type: ignore[arg-type]
 
-        assert sensor.is_on is False
+        assert sensor.native_value == PHASE_CLEAN
 
-    def test_is_on_for_occupied_phase(self) -> None:
-        """Sensor is 'on' for occupied phase (dirty)."""
+    def test_native_value_occupied(self) -> None:
+        """Sensor reports occupied phase."""
         state = _make_dirty_state(phase=PHASE_OCCUPIED)
         machine = _make_mock_state_machine(state=state)
         entry = _StubEntry()
         sensor = TurnoverCalCleanlinessSensor(entry, machine)  # type: ignore[arg-type]
 
-        assert sensor.is_on is True
+        assert sensor.native_value == PHASE_OCCUPIED
 
-    def test_is_on_for_being_cleaned_phase(self) -> None:
-        """Sensor is 'on' for being_cleaned phase (still dirty)."""
+    def test_native_value_being_cleaned(self) -> None:
+        """Sensor reports being_cleaned phase."""
         state = _make_dirty_state(phase=PHASE_BEING_CLEANED)
         machine = _make_mock_state_machine(state=state)
         entry = _StubEntry()
         sensor = TurnoverCalCleanlinessSensor(entry, machine)  # type: ignore[arg-type]
 
-        assert sensor.is_on is True
+        assert sensor.native_value == PHASE_BEING_CLEANED
 
 
 # ---------------------------------------------------------------------------
@@ -214,11 +227,19 @@ class TestCleanlinessSensorExtraAttributes:
 
         attrs = sensor.extra_state_attributes
         assert attrs is not None
-        assert attrs["phase"] == PHASE_CLEAN
         assert attrs["last_transition_at"] == now.isoformat()
         assert attrs["last_transition_reason"] == REASON_CLEANING_DURATION_ELAPSED
         assert attrs["dirty_since"] is None
         assert attrs["timer_target"] is None
+
+    def test_phase_not_in_extra_attributes(self) -> None:
+        """Phase is the native_value, not an extra attribute."""
+        machine = _make_mock_state_machine()
+        entry = _StubEntry()
+        sensor = TurnoverCalCleanlinessSensor(entry, machine)  # type: ignore[arg-type]
+
+        attrs = sensor.extra_state_attributes
+        assert "phase" not in attrs
 
     def test_dirty_state_attributes_with_dirty_since(self) -> None:
         """Dirty state includes dirty_since as ISO string."""
@@ -249,7 +270,6 @@ class TestCleanlinessSensorExtraAttributes:
         attrs = sensor.extra_state_attributes
         assert attrs is not None
         assert attrs["timer_target"] == timer_target.isoformat()
-        assert attrs["phase"] == PHASE_BEING_CLEANED
 
     def test_all_attribute_keys_present(self) -> None:
         """All required extra attribute keys are always present."""
@@ -260,7 +280,6 @@ class TestCleanlinessSensorExtraAttributes:
         attrs = sensor.extra_state_attributes
         assert attrs is not None
         expected_keys = {
-            "phase",
             "last_transition_at",
             "last_transition_reason",
             "dirty_since",
@@ -380,6 +399,7 @@ class TestAsyncSetupEntry:
         hass.data[DOMAIN] = {
             entry.entry_id: {
                 "cleanliness": machine,
+                "feed_token": "tok",
             },
         }
 
@@ -391,8 +411,10 @@ class TestAsyncSetupEntry:
 
         await async_setup_entry(hass, entry, _capture_entities)  # type: ignore[arg-type]
 
-        assert len(added_entities) == 1
-        assert isinstance(added_entities[0], TurnoverCalCleanlinessSensor)
+        cleanliness = [
+            e for e in added_entities if isinstance(e, TurnoverCalCleanlinessSensor)
+        ]
+        assert len(cleanliness) == 1
 
     @pytest.mark.asyncio
     async def test_setup_entry_entity_has_correct_entry_id(
@@ -406,6 +428,7 @@ class TestAsyncSetupEntry:
         hass.data[DOMAIN] = {
             entry.entry_id: {
                 "cleanliness": machine,
+                "feed_token": "tok",
             },
         }
 
@@ -417,9 +440,11 @@ class TestAsyncSetupEntry:
 
         await async_setup_entry(hass, entry, _capture_entities)  # type: ignore[arg-type]
 
-        sensor = added_entities[0]
-        assert isinstance(sensor, TurnoverCalCleanlinessSensor)
-        assert sensor.unique_id == "specific-entry-77_cleanliness"
+        cleanliness = [
+            e for e in added_entities if isinstance(e, TurnoverCalCleanlinessSensor)
+        ]
+        assert len(cleanliness) == 1
+        assert cleanliness[0].unique_id == "specific-entry-77_cleanliness"
 
 
 # ---------------------------------------------------------------------------
