@@ -76,7 +76,7 @@ def _find_entry_data_by_entity(
 ) -> dict[str, Any]:
     """Find entry data matching the given entity ID.
 
-    Matches by calendar entity or binary_sensor entity ID.
+    Matches by calendar entity or sensor entity ID.
 
     Args:
         domain_data: The hass.data[DOMAIN] dictionary.
@@ -97,7 +97,7 @@ def _find_entry_data_by_entity(
         )
         if coord is not None and coord.calendar_entity_id == entity_id:
             return entry_data
-        if entry_data.get("binary_sensor_entity_id") == entity_id:
+        if entry_data.get("sensor_entity_id") == entity_id:
             return entry_data
 
     msg = f"No TurnoverCal entry found for entity {entity_id}"
@@ -263,7 +263,7 @@ def _resolve_cleanliness_machines(
 ) -> list[Any]:
     """Resolve targets to cleanliness state machines.
 
-    Supports targeting by calendar entity, binary_sensor entity,
+    Supports targeting by calendar entity, sensor entity,
     or config_entry_id.
 
     Args:

@@ -106,36 +106,36 @@ accordingly.
 
 ---
 
-### User Story 3 - Binary Sensor Visibility on Dashboard (Priority: P1)
+### User Story 3 - Enum Sensor Visibility on Dashboard (Priority: P1)
 
 As a property manager with multiple vacation rentals, I want each property to
-have a binary sensor showing dirty or clean status, so that I can build a
+have an enum sensor showing the cleanliness phase, so that I can build a
 dashboard overview of all my properties and create automations based on
 cleanliness state.
 
-**Why this priority**: The binary sensor is the primary user-facing output of
-the feature. It makes the dirty/clean state visible, actionable, and automatable
+**Why this priority**: The enum sensor is the primary user-facing output of
+the feature. It makes the cleanliness phase visible, actionable, and automatable
 within Home Assistant.
 
 **Independent Test**: Can be fully tested by loading the integration and
-verifying the binary sensor entity appears under the existing device with
-correct on/off states matching the property's cleanliness.
+verifying the enum sensor entity appears under the existing device with
+correct phase states matching the property's cleanliness.
 
 **Acceptance Scenarios**:
 
 1. **Given** a property with the TurnoverCal integration configured, **When**
-   the integration loads, **Then** a binary sensor entity appears under the
+   the integration loads, **Then** an enum sensor entity appears under the
    property's existing device with an entity ID consistent
    with other TurnoverCal entities (for example,
-   `binary_sensor.<property>_dirty`, derived from the
-   config entry title and a `dirty` translation key).
-2. **Given** a property in the "dirty" state, **When** viewing the binary
-   sensor, **Then** the state reads "on" and additional context attributes
-   include when the state last changed, the reason for the transition, and the
-   current `phase` (`occupied`, `awaiting_cleaning`, or `being_cleaned`).
-3. **Given** a property in the "clean" state, **When** viewing the binary
-   sensor, **Then** the state reads "off" and the `phase` attribute reports
-   `clean`.
+   `sensor.<property>_cleanliness`, derived from the
+   config entry title and a `cleanliness` translation key).
+2. **Given** a property in a dirty state, **When** viewing the enum
+   sensor, **Then** the state reads the current phase (one of `occupied`,
+   `awaiting_cleaning`, or `being_cleaned`) and additional context
+   attributes include when the state last changed and the reason for
+   the transition.
+3. **Given** a property in the "clean" state, **When** viewing the enum
+   sensor, **Then** the state reads `clean`.
 
 ---
 
@@ -407,20 +407,20 @@ restarting the integration, and verifying the binary sensor still reads "on"
 - **FR-028**: Cleaning events created from mid-stay cancellations MUST be
   preserved even if the source booking disappears from the reservation calendar.
 
-#### Binary Sensor
+#### Enum Sensor
 
-- **FR-029**: System MUST expose the cleanliness state as a `binary_sensor`
-  entity under the property's existing device.
-- **FR-030**: The binary sensor MUST report "on" when the property is dirty and
-  "off" when the property is clean.
-- **FR-031**: The binary sensor MUST include attributes for the last state
+- **FR-029**: System MUST expose the cleanliness state as a `sensor` entity
+  with `SensorDeviceClass.ENUM` under the property's existing device.
+- **FR-030**: The enum sensor MUST report the current phase as its state:
+  one of `clean`, `occupied`, `awaiting_cleaning`, or `being_cleaned`.
+- **FR-031**: The enum sensor MUST include attributes for the last state
   change timestamp, the reason for the transition (e.g., "guest_checkin,"
   "mid_stay_cancellation," "lock_code_entry," "cleaning_duration_elapsed,"
-  "service_call_mark_clean," "service_call_mark_dirty"), a `phase` attribute
-  indicating the property's lifecycle phase, `dirty_since` (ISO 8601 or null
-  indicating when the current dirty period started), and `timer_target`
-  (ISO 8601 or null indicating the auto-clean timer deadline).
-- **FR-032**: The `phase` attribute MUST report one of exactly four values:
+  "service_call_mark_clean," "service_call_mark_dirty"), `dirty_since`
+  (ISO 8601 or null indicating when the current dirty period started),
+  and `timer_target` (ISO 8601 or null indicating the auto-clean timer
+  deadline).
+- **FR-032**: The enum sensor state MUST be one of exactly four values:
   `occupied` when a guest is actively staying (between check-in and check-out),
   `awaiting_cleaning` after the guest checks out while the property remains
   dirty and no cleaner has started, `being_cleaned` after a cleaning lock code
@@ -430,22 +430,22 @@ restarting the integration, and verifying the binary sensor still reads "on"
   `clean` → `occupied` → `awaiting_cleaning` →
   `being_cleaned` → `clean`.
 - **FR-033**: On detection of a guest check-out event (while the property is
-  dirty), the system MUST transition the `phase` attribute from `occupied` to
-  `awaiting_cleaning`. On a mid-stay cancellation dirty trigger, the `phase`
+  dirty), the system MUST transition the enum sensor state from `occupied` to
+  `awaiting_cleaning`. On a mid-stay cancellation dirty trigger, the state
   MUST be set to `awaiting_cleaning` (the guest's stay is terminated). On a
-  `mark_dirty` service call when no guest is actively staying, the `phase` MUST
+  `mark_dirty` service call when no guest is actively staying, the state MUST
   be set to `awaiting_cleaning`. On detection of a cleaning lock code entry
-  (while phase is `awaiting_cleaning`), the system MUST transition the `phase`
+  (while state is `awaiting_cleaning`), the system MUST transition the state
   to `being_cleaned`. On cleaning duration timer expiration, the system MUST
-  transition the `phase` to `clean`. The `awaiting_cleaning` phase is the
+  transition the state to `clean`. The `awaiting_cleaning` state is the
   canonical value for all dirty-but-no-cleaner-started states; the
-  `being_cleaned` phase indicates active cleaning in progress.
-- **FR-034**: The binary sensor entity ID MUST be derived
+  `being_cleaned` state indicates active cleaning in progress.
+- **FR-034**: The enum sensor entity ID MUST be derived
   using this integration's standard naming convention
   (config entry title + translation key) rather than
   hard-coded string concatenation. The translation key
-  `"dirty"` MUST be used, producing entity IDs like
-  `binary_sensor.<config_entry_title_slug>_dirty`
+  `"cleanliness"` MUST be used, producing entity IDs like
+  `sensor.<config_entry_title_slug>_cleanliness`
   through HA's standard entity ID derivation. The
   translation key MUST be stable so that entity IDs
   remain predictable for automations.
@@ -503,15 +503,15 @@ restarting the integration, and verifying the binary sensor still reads "on"
 - Service actions (`mark_dirty`, `mark_clean`) are integration-level services
   (prefixed with `turnovercal.`) consistent with the existing
   `mark_cleaning_started` pattern.
-- The binary sensor uses the `problem` device class, which aligns with Home
-  Assistant conventions for "something needs attention" indicators.
+- The enum sensor uses the `enum` device class, which exposes the cleanliness
+  phase directly as the sensor state for dashboards and automations.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: 100% of guest check-ins result in the property's binary sensor
-  transitioning to "on" (dirty) within one event processing cycle of the
+- **SC-001**: 100% of guest check-ins result in the property's enum sensor
+  transitioning to "occupied" within one event processing cycle of the
   check-in detection.
 - **SC-002**: 100% of mid-stay cancellations result in the property becoming
   dirty within one polling cycle of the booking's removal, and the resulting
@@ -524,7 +524,7 @@ restarting the integration, and verifying the binary sensor still reads "on"
   action (service call), with an immediate cleaning event appearing on the
   calendar within 5 seconds.
 - **SC-005**: The cleanliness state survives 100% of Home Assistant restarts and
-  integration reloads — the binary sensor reports the correct pre-restart state
+  integration reloads — the enum sensor reports the correct pre-restart phase
   immediately upon startup.
 - **SC-006**: Zero orphaned dirty properties — every dirty transition has a
   visible cleaning event on the turnover calendar, either from the standard

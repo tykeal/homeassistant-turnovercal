@@ -46,7 +46,7 @@ mark_clean:
       integration: turnovercal
       domain:
         - calendar
-        - binary_sensor
+        - sensor
   fields:
     config_entry_id:
       name: Config entry ID
@@ -70,7 +70,7 @@ mark_dirty:
       integration: turnovercal
       domain:
         - calendar
-        - binary_sensor
+        - sensor
   fields:
     config_entry_id:
       name: Config entry ID

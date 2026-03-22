@@ -37,7 +37,7 @@ target:
     integration: turnovercal
     domain:
       - calendar
-      - binary_sensor
+      - sensor
 ```
 
 ### Fields
@@ -61,7 +61,7 @@ target:
 ```yaml
 service: turnovercal.mark_dirty
 target:
-  entity_id: binary_sensor.turnovercal_beach_house_dirty
+  entity_id: sensor.turnovercal_beach_house_cleanliness
 ```
 
 ```yaml
@@ -87,7 +87,7 @@ target:
     integration: turnovercal
     domain:
       - calendar
-      - binary_sensor
+      - sensor
 ```
 
 ### Fields (mark_clean)
@@ -98,12 +98,12 @@ target:
 
 ### Behavior
 
-| Current State       | Result                              |
-| ------------------- | ----------------------------------- |
-| `clean`             | No-op. Already clean.               |
-| `occupied`          | → clean. Binary sensor off.         |
-| `awaiting_cleaning` | → clean. Binary sensor off.         |
-| `being_cleaned`     | → clean. Cancels timer. Sensor off. |
+| Current State       | Result                                        |
+| ------------------- | --------------------------------------------- |
+| `clean`             | No-op. Already clean.                         |
+| `occupied`          | → clean. Sensor state: clean.                 |
+| `awaiting_cleaning` | → clean. Sensor state: clean.                 |
+| `being_cleaned`     | → clean. Cancels timer. Sensor state: clean.  |
 
 ### Responses (mark_clean)
 
@@ -120,40 +120,39 @@ target:
 ```yaml
 service: turnovercal.mark_clean
 target:
-  entity_id: binary_sensor.turnovercal_beach_house_dirty
+  entity_id: sensor.turnovercal_beach_house_cleanliness
 ```
 
 ---
 
-## Binary Sensor Entity Contract
+## Enum Sensor Entity Contract
 
 ### Entity ID Pattern
 
 ```text
-binary_sensor.<config_entry_title_slug>_dirty
+sensor.<config_entry_title_slug>_cleanliness
 ```
 
 Where `<config_entry_title_slug>` is derived by HA from the config entry
-title and translation key (e.g., `binary_sensor.beach_house_dirty`).
+title and translation key (e.g., `sensor.beach_house_cleanliness`).
 
 ### Device Class
 
-`BinarySensorDeviceClass.PROBLEM`
+`SensorDeviceClass.ENUM`
 
 ### State Mapping
 
-| Property State | Binary Sensor State | `is_on` |
-|----------------|---------------------|---------|
-| Clean          | `off`               | `False` |
-| Dirty          | `on`                | `True`  |
+| Property Phase       | Sensor State         |
+| -------------------- | -------------------- |
+| clean                | `clean`              |
+| occupied             | `occupied`           |
+| awaiting_cleaning    | `awaiting_cleaning`  |
+| being_cleaned        | `being_cleaned`      |
 
 ### Extra State Attributes
 
 | Attribute                | Type     | Description                 |
 | ------------------------ | -------- | --------------------------- |
-| `phase`                  | string   | `clean`, `occupied`,        |
-|                          |          | `awaiting_cleaning`, or     |
-|                          |          | `being_cleaned`             |
 | `last_transition_at`     | ISO 8601 | When last transition        |
 |                          |          | occurred                    |
 | `last_transition_reason` | string   | Reason for last transition  |
@@ -163,12 +162,11 @@ title and translation key (e.g., `binary_sensor.beach_house_dirty`).
 
 ### State Change Events
 
-The binary sensor fires standard HA `state_changed` events. Automations
+The enum sensor fires standard HA `state_changed` events. Automations
 can trigger on:
 
-- `binary_sensor.<config_entry_title_slug>_dirty` → `on` (property became dirty)
-- `binary_sensor.<config_entry_title_slug>_dirty` → `off` (property became clean)
-- Attribute change on `phase` (e.g., `awaiting_cleaning` → `being_cleaned`)
+- `sensor.<config_entry_title_slug>_cleanliness` → phase changes
+  (e.g., `clean` → `occupied`, `awaiting_cleaning` → `being_cleaned`)
 
 ---
 
@@ -206,5 +204,5 @@ can trigger on:
 ### Outbound Behavior
 
 No custom bus events emitted. State changes are reflected through the
-binary sensor's standard `state_changed` events, which HA emits
+enum sensor's standard `state_changed` events, which HA emits
 automatically when entity state or attributes change.
