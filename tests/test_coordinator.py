@@ -1483,3 +1483,65 @@ class TestPreserveMidstayCancellationEvents:
         cache.async_remove_event.assert_called_once_with(
             regular_event.uid,
         )
+
+
+class TestPreserveFallbackCleaningEvents:
+    """Tests for preserving fallback cleaning events."""
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_preserved_event_survives_source_removal(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Fallback event with preserve=True survives source removal."""
+        preserved_event = _make_event(
+            15,
+            14,
+            15,
+            18,
+            is_trailing=True,
+        )
+        preserved_event.preserve = True
+
+        cache = _make_cache_mock(
+            {preserved_event.uid: preserved_event},
+        )
+        coordinator = _make_coordinator(hass, cache)
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        cache.async_remove_event.assert_not_called()
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_regular_event_without_preserve_removed(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Regular future event without preserve is removed."""
+        regular_event = _make_event(
+            20,
+            11,
+            20,
+            15,
+            is_trailing=True,
+        )
+        assert not regular_event.preserve
+
+        cache = _make_cache_mock(
+            {regular_event.uid: regular_event},
+        )
+        coordinator = _make_coordinator(hass, cache)
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        cache.async_remove_event.assert_called_once_with(
+            regular_event.uid,
+        )

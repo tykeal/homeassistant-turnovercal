@@ -235,8 +235,8 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         """Check whether a cached event should be preserved.
 
         Events are preserved when they are lock-adjusted,
-        created from a mid-stay cancellation, or already in
-        the past.
+        created from a mid-stay cancellation, explicitly
+        marked for preservation, or already in the past.
 
         Args:
             cached_evt: The cached event to evaluate.
@@ -249,6 +249,8 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         if cached_evt.adjusted_by_lock:
             return True
         if cached_evt.created_from_midstay_cancellation:
+            return True
+        if cached_evt.preserve:
             return True
         return cached_evt.dtend <= now
 

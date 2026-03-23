@@ -61,6 +61,11 @@ class TestTurnoverEventConstruction:
         evt = _make_event()
         assert evt.adjusted_by_lock is False
 
+    def test_default_preserve_false(self) -> None:
+        """Default preserve must be False."""
+        evt = _make_event()
+        assert evt.preserve is False
+
     def test_default_lock_unlock_time_none(self) -> None:
         """Default lock_unlock_time must be None."""
         evt = _make_event()
@@ -296,6 +301,26 @@ class TestTurnoverEventSerialization:
         del data["created_from_midstay_cancellation"]
         restored = TurnoverEvent.from_dict(data)
         assert restored.created_from_midstay_cancellation is False
+
+    def test_preserve_flag_round_trip(self) -> None:
+        """Preserve flag survives serialization round-trip."""
+        evt = _make_event(
+            source_checkin_id=None,
+            is_trailing=True,
+        )
+        evt.preserve = True
+        data = evt.to_dict()
+        assert data["preserve"] is True
+        restored = TurnoverEvent.from_dict(data)
+        assert restored.preserve is True
+
+    def test_preserve_flag_defaults_false(self) -> None:
+        """Preserve defaults to False when key absent in dict."""
+        evt = _make_event()
+        data = evt.to_dict()
+        del data["preserve"]
+        restored = TurnoverEvent.from_dict(data)
+        assert restored.preserve is False
 
     def test_none_checkin_id_round_trip(self) -> None:
         """Trailing event with source_checkin_id=None survives round-trip."""

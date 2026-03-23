@@ -273,6 +273,7 @@ def _build_coverage_delegates(  # noqa: PLR0913
             source_checkin_id=None,
             created_at=datetime.now(tz=ZoneInfo("UTC")),
             is_trailing=True,
+            preserve=True,
         )
         await cache.async_add_event(fallback)
         return uid
