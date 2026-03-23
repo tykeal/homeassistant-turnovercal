@@ -11,12 +11,8 @@ from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import (
-    config_validation as cv,
-)
-from homeassistant.helpers import (
-    entity_registry as er,
-)
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from custom_components.turnovercal.const import DOMAIN
