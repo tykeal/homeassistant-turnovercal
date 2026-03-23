@@ -20,13 +20,16 @@ from custom_components.turnovercal.const import DOMAIN
 from custom_components.turnovercal.models import TurnoverEvent
 from custom_components.turnovercal.services import (
     ATTR_CONFIG_ENTRY_ID,
+    ATTR_START_TIME,
     ATTR_TIMESTAMP,
     SERVICE_MARK_CLEAN,
     SERVICE_MARK_CLEANING,
     SERVICE_MARK_DIRTY,
+    SERVICE_REMOVE_CLEANING_EVENT,
     _handle_mark_clean,
     _handle_mark_cleaning,
     _handle_mark_dirty,
+    _handle_remove_cleaning_event,
     _parse_timestamp,
     _resolve_coordinators,
     async_setup_services,
@@ -665,3 +668,177 @@ class TestHandleMarkDirty:
         )
         await _handle_mark_dirty(call)
         mock_machine.async_mark_dirty.assert_awaited_once()
+
+
+# -------------------------------------------------------------------
+# remove_cleaning_event service tests
+# -------------------------------------------------------------------
+
+
+class TestHandleRemoveCleaningEvent:
+    """Tests for the remove_cleaning_event service handler."""
+
+    async def test_service_registration(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """remove_cleaning_event service is registered."""
+        await async_setup_services(hass)
+        assert hass.services.has_service(
+            DOMAIN,
+            SERVICE_REMOVE_CLEANING_EVENT,
+        )
+
+    async def test_removes_event_by_start_time(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Service removes event matching start_time."""
+        evt = _make_event()
+        coord = _make_coordinator()
+        coord.cache_events = {evt.uid: evt}
+        cache = MagicMock()
+        cache.async_remove_event = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cache": cache,
+            },
+        }
+        call = _make_service_call(
+            hass,
+            target={
+                "entity_id": ("calendar.rental_control_beach_house"),
+            },
+            data={
+                ATTR_START_TIME: evt.dtstart.isoformat(),
+            },
+        )
+        await _handle_remove_cleaning_event(call)
+        cache.async_remove_event.assert_awaited_once_with(
+            evt.uid,
+        )
+        coord.async_set_updated_data.assert_called_once()
+
+    async def test_raises_when_no_event_matches(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Service raises when no event matches start_time."""
+        coord = _make_coordinator()
+        coord.cache_events = {}
+        cache = MagicMock()
+        cache.async_remove_event = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cache": cache,
+            },
+        }
+        call = _make_service_call(
+            hass,
+            target={
+                "entity_id": ("calendar.rental_control_beach_house"),
+            },
+            data={
+                ATTR_START_TIME: "2026-03-20T10:00:00",
+            },
+        )
+        with pytest.raises(ServiceValidationError):
+            await _handle_remove_cleaning_event(call)
+
+    async def test_raises_when_start_time_missing(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Service raises when start_time is not provided."""
+        coord = _make_coordinator()
+        coord.cache_events = {}
+        cache = MagicMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cache": cache,
+            },
+        }
+        call = _make_service_call(
+            hass,
+            target={
+                "entity_id": ("calendar.rental_control_beach_house"),
+            },
+        )
+        with pytest.raises(ServiceValidationError):
+            await _handle_remove_cleaning_event(call)
+
+    async def test_config_entry_targeting(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Service resolves via config_entry_id."""
+        evt = _make_event()
+        coord = _make_coordinator()
+        coord.cache_events = {evt.uid: evt}
+        cache = MagicMock()
+        cache.async_remove_event = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cache": cache,
+            },
+        }
+        call = _make_service_call(
+            hass,
+            data={
+                ATTR_CONFIG_ENTRY_ID: _ENTRY_ID,
+                ATTR_START_TIME: evt.dtstart.isoformat(),
+            },
+        )
+        await _handle_remove_cleaning_event(call)
+        cache.async_remove_event.assert_awaited_once_with(
+            evt.uid,
+        )
+
+
+class TestRemoveCleaningEventContract:
+    """Verify remove_cleaning_event service YAML contract."""
+
+    _svc_path = (
+        Path(__file__).resolve().parent.parent
+        / "custom_components"
+        / "turnovercal"
+        / "services.yaml"
+    )
+
+    def _load_yaml(self) -> dict[str, Any]:
+        """Load the services.yaml file."""
+        with self._svc_path.open() as f:
+            result: dict[str, Any] = yaml.safe_load(f)
+            return result
+
+    def test_service_exists(self) -> None:
+        """remove_cleaning_event exists in YAML."""
+        data = self._load_yaml()
+        assert "remove_cleaning_event" in data
+
+    def test_target_entities(self) -> None:
+        """Target includes calendar and sensor."""
+        svc = self._load_yaml()["remove_cleaning_event"]
+        entity = svc["target"]["entity"]
+        assert entity["integration"] == "turnovercal"
+        domain = entity["domain"]
+        assert "calendar" in domain
+        assert "sensor" in domain
+
+    def test_start_time_field(self) -> None:
+        """start_time field is required with text selector."""
+        fields = self._load_yaml()["remove_cleaning_event"]["fields"]
+        assert "start_time" in fields
+        st = fields["start_time"]
+        assert st["required"] is True
+        assert "text" in st["selector"]
+
+    def test_name_and_description(self) -> None:
+        """Name and description are present."""
+        svc = self._load_yaml()["remove_cleaning_event"]
+        assert svc["name"] == "Remove cleaning event"
+        assert len(svc["description"]) > 0

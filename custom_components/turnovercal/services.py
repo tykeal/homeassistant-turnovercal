@@ -30,8 +30,10 @@ _LOGGER = logging.getLogger(__name__)
 SERVICE_MARK_CLEANING = "mark_cleaning_started"
 SERVICE_MARK_CLEAN = "mark_clean"
 SERVICE_MARK_DIRTY = "mark_dirty"
+SERVICE_REMOVE_CLEANING_EVENT = "remove_cleaning_event"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_TIMESTAMP = "timestamp"
+ATTR_START_TIME = "start_time"
 
 
 def _find_coordinator_by_entity(
@@ -353,6 +355,109 @@ async def _handle_mark_dirty(call: ServiceCall) -> None:
         await machine.async_mark_dirty()
 
 
+def _resolve_entry_data_list(
+    hass: HomeAssistant,
+    call: ServiceCall,
+) -> list[dict[str, Any]]:
+    """Resolve targets to entry data dicts.
+
+    Supports targeting by calendar entity, sensor entity,
+    or config_entry_id.
+
+    Args:
+        hass: Home Assistant instance.
+        call: The service call with target and data.
+
+    Returns:
+        List of resolved entry data dictionaries.
+
+    Raises:
+        ServiceValidationError: If targeting is invalid.
+
+    """
+    entity_ids: list[str] = cv.ensure_list(
+        call.data.get("entity_id", []),
+    )
+    config_entry_id = call.data.get(ATTR_CONFIG_ENTRY_ID)
+
+    if entity_ids and config_entry_id:
+        msg = "Provide either an entity target or config_entry_id, not both"
+        raise ServiceValidationError(
+            msg,
+            translation_domain=DOMAIN,
+            translation_key="ambiguous_target",
+        )
+
+    if not entity_ids and not config_entry_id:
+        msg = "Provide either an entity target or config_entry_id"
+        raise ServiceValidationError(
+            msg,
+            translation_domain=DOMAIN,
+            translation_key="missing_target",
+        )
+
+    domain_data: dict[str, Any] = hass.data.get(DOMAIN, {})
+
+    if config_entry_id:
+        entry_data = domain_data.get(config_entry_id)
+        if entry_data is None:
+            msg = f"Config entry {config_entry_id} not found or not loaded"
+            raise ServiceValidationError(
+                msg,
+                translation_domain=DOMAIN,
+                translation_key="entry_not_found",
+            )
+        return [entry_data]
+
+    return [_find_entry_data_by_entity(domain_data, eid) for eid in entity_ids]
+
+
+async def _handle_remove_cleaning_event(
+    call: ServiceCall,
+) -> None:
+    """Handle the remove_cleaning_event service call.
+
+    Finds the cleaning event matching the given start_time
+    in each resolved coordinator's cache, removes it, and
+    triggers a coordinator refresh.
+
+    Args:
+        call: The service call.
+
+    """
+    hass = call.hass
+    raw_start = call.data.get(ATTR_START_TIME)
+    if raw_start is None:
+        msg = "start_time is required"
+        raise ServiceValidationError(
+            msg,
+            translation_domain=DOMAIN,
+            translation_key="missing_start_time",
+        )
+
+    start_dt = _parse_timestamp(hass, raw_start)
+    entries = _resolve_entry_data_list(hass, call)
+
+    for entry_data in entries:
+        coord: TurnoverCoordinator = entry_data["coordinator"]
+        cache = entry_data["cache"]
+        matched_uid: str | None = None
+        for uid, evt in coord.cache_events.items():
+            evt_utc = evt.dtstart.astimezone(ZoneInfo("UTC"))
+            if evt_utc == start_dt:
+                matched_uid = uid
+                break
+        if matched_uid is None:
+            msg = f"No cleaning event at {raw_start}"
+            raise ServiceValidationError(
+                msg,
+                translation_domain=DOMAIN,
+                translation_key="event_not_found",
+            )
+        await cache.async_remove_event(matched_uid)
+        coord.async_set_updated_data(coord.cache_events)
+
+
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Register TurnoverCal services.
 
@@ -381,6 +486,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             SERVICE_MARK_DIRTY,
             _handle_mark_dirty,
         )
+    if not hass.services.has_service(
+        DOMAIN,
+        SERVICE_REMOVE_CLEANING_EVENT,
+    ):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_REMOVE_CLEANING_EVENT,
+            _handle_remove_cleaning_event,
+        )
 
 
 async def async_unload_services(hass: HomeAssistant) -> None:
@@ -396,3 +510,4 @@ async def async_unload_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, SERVICE_MARK_CLEANING)
     hass.services.async_remove(DOMAIN, SERVICE_MARK_CLEAN)
     hass.services.async_remove(DOMAIN, SERVICE_MARK_DIRTY)
+    hass.services.async_remove(DOMAIN, SERVICE_REMOVE_CLEANING_EVENT)

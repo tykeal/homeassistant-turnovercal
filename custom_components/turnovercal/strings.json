@@ -129,6 +129,12 @@
     },
     "invalid_timezone": {
       "message": "Invalid Home Assistant timezone configuration."
+    },
+    "missing_start_time": {
+      "message": "start_time is required."
+    },
+    "event_not_found": {
+      "message": "No cleaning event found at the specified start time."
     }
   },
   "services": {
@@ -143,6 +149,10 @@
     "mark_dirty": {
       "name": "Mark dirty",
       "description": "Mark the property as dirty immediately."
+    },
+    "remove_cleaning_event": {
+      "name": "Remove cleaning event",
+      "description": "Remove a specific cleaning event by start time."
     }
   }
 }
