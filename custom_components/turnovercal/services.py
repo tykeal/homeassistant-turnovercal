@@ -419,7 +419,12 @@ async def _handle_remove_cleaning_event(
 
     Finds the cleaning event matching the given start_time
     in each resolved coordinator's cache, removes it, and
-    triggers a coordinator refresh.
+    updates the coordinator's cached data.
+
+    Note: removal is permanent for preserved/fallback events
+    that are not recomputed from source data.  Computed events
+    with deterministic UIDs will be re-added on the next
+    coordinator poll cycle.
 
     Args:
         call: The service call.
