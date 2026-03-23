@@ -351,6 +351,8 @@ async def _handle_remove_cleaning_event(
     start_dt = _parse_timestamp(hass, raw_start)
     entries = _resolve_entry_data_list(hass, call)
 
+    # Phase 1: validate all targets have a matching event
+    removals: list[tuple[TurnoverCoordinator, Any, str]] = []
     for entry_data in entries:
         coord: TurnoverCoordinator = entry_data["coordinator"]
         cache = entry_data["cache"]
@@ -367,7 +369,11 @@ async def _handle_remove_cleaning_event(
                 translation_domain=DOMAIN,
                 translation_key="event_not_found",
             )
-        await cache.async_remove_event(matched_uid)
+        removals.append((coord, cache, matched_uid))
+
+    # Phase 2: apply removals now that all targets are valid
+    for coord, cache, uid in removals:
+        await cache.async_remove_event(uid)
         coord.async_set_updated_data(coord.cache_events)
 
 
