@@ -830,12 +830,12 @@ class TestRemoveCleaningEventContract:
         assert "sensor" in domain
 
     def test_start_time_field(self) -> None:
-        """start_time field is required with text selector."""
+        """start_time field is required with datetime selector."""
         fields = self._load_yaml()["remove_cleaning_event"]["fields"]
         assert "start_time" in fields
         st = fields["start_time"]
         assert st["required"] is True
-        assert "text" in st["selector"]
+        assert "datetime" in st["selector"]
 
     def test_name_and_description(self) -> None:
         """Name and description are present."""
