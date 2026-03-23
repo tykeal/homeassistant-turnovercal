@@ -11,7 +11,12 @@ from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import (
+    config_validation as cv,
+)
+from homeassistant.helpers import (
+    entity_registry as er,
+)
 from homeassistant.util import dt as dt_util
 
 from custom_components.turnovercal.const import DOMAIN
@@ -36,53 +41,22 @@ ATTR_TIMESTAMP = "timestamp"
 ATTR_START_TIME = "start_time"
 
 
-def _find_coordinator_by_entity(
-    domain_data: dict[str, Any],
-    entity_id: str,
-) -> TurnoverCoordinator:
-    """Find a coordinator matching the given entity ID.
-
-    Args:
-        domain_data: The hass.data[DOMAIN] dictionary.
-        entity_id: The calendar entity ID to match.
-
-    Returns:
-        The matching TurnoverCoordinator.
-
-    Raises:
-        ServiceValidationError: If no match is found.
-
-    """
-    for entry_data in domain_data.values():
-        if not isinstance(entry_data, dict):
-            continue
-        coord: TurnoverCoordinator | None = entry_data.get(
-            "coordinator",
-        )
-        if coord is None:
-            continue
-        if coord.calendar_entity_id == entity_id:
-            return coord
-
-    msg = f"No TurnoverCal entry found for entity {entity_id}"
-    raise ServiceValidationError(
-        msg,
-        translation_domain=DOMAIN,
-        translation_key="entity_not_found",
-    )
-
-
-def _find_entry_data_by_entity(
+def _resolve_entry_data_by_entity(
+    hass: HomeAssistant,
     domain_data: dict[str, Any],
     entity_id: str,
 ) -> dict[str, Any]:
-    """Find entry data matching the given entity ID.
+    """Resolve an entity to its entry data via the registry.
 
-    Matches by calendar entity or sensor entity ID.
+    Uses the HA entity registry to map *any* entity belonging
+    to this integration back to its config entry.  Falls back
+    to matching the coordinator's calendar_entity_id when the
+    entity is not yet in the registry.
 
     Args:
+        hass: Home Assistant instance.
         domain_data: The hass.data[DOMAIN] dictionary.
-        entity_id: The entity ID to match.
+        entity_id: The entity ID to resolve.
 
     Returns:
         The matching entry data dictionary.
@@ -91,6 +65,15 @@ def _find_entry_data_by_entity(
         ServiceValidationError: If no match is found.
 
     """
+    registry = er.async_get(hass)
+    reg_entry = registry.async_get(entity_id)
+    if reg_entry is not None and reg_entry.config_entry_id:
+        entry_data: dict[str, Any] | None = domain_data.get(
+            reg_entry.config_entry_id,
+        )
+        if entry_data is not None:
+            return entry_data
+
     for entry_data in domain_data.values():
         if not isinstance(entry_data, dict):
             continue
@@ -98,8 +81,6 @@ def _find_entry_data_by_entity(
             "coordinator",
         )
         if coord is not None and coord.calendar_entity_id == entity_id:
-            return entry_data
-        if entry_data.get("sensor_entity_id") == entity_id:
             return entry_data
 
     msg = f"No TurnoverCal entry found for entity {entity_id}"
@@ -110,22 +91,22 @@ def _find_entry_data_by_entity(
     )
 
 
-def _resolve_coordinators(
+def _resolve_entry_data_list(
     hass: HomeAssistant,
     call: ServiceCall,
-) -> list[TurnoverCoordinator]:
-    """Resolve targets to TurnoverCoordinators.
+) -> list[dict[str, Any]]:
+    """Resolve service-call targets to entry data dicts.
 
+    Canonical target resolver for all TurnoverCal services.
     Exactly one of entity target or config_entry_id must be
-    provided. Returns matching coordinators or raises
-    ServiceValidationError.
+    provided.
 
     Args:
         hass: Home Assistant instance.
         call: The service call with target and data.
 
     Returns:
-        List of resolved TurnoverCoordinators.
+        List of resolved entry data dictionaries.
 
     Raises:
         ServiceValidationError: If targeting is invalid.
@@ -134,7 +115,6 @@ def _resolve_coordinators(
     entity_ids: list[str] = cv.ensure_list(
         call.data.get("entity_id", []),
     )
-
     config_entry_id = call.data.get(ATTR_CONFIG_ENTRY_ID)
 
     if entity_ids and config_entry_id:
@@ -164,9 +144,32 @@ def _resolve_coordinators(
                 translation_domain=DOMAIN,
                 translation_key="entry_not_found",
             )
-        return [entry_data["coordinator"]]
+        return [entry_data]
 
-    return [_find_coordinator_by_entity(domain_data, eid) for eid in entity_ids]
+    return [_resolve_entry_data_by_entity(hass, domain_data, eid) for eid in entity_ids]
+
+
+def _resolve_coordinators(
+    hass: HomeAssistant,
+    call: ServiceCall,
+) -> list[TurnoverCoordinator]:
+    """Resolve targets to TurnoverCoordinators.
+
+    Delegates to ``_resolve_entry_data_list`` and extracts
+    the coordinator from each resolved entry.
+
+    Args:
+        hass: Home Assistant instance.
+        call: The service call with target and data.
+
+    Returns:
+        List of resolved TurnoverCoordinators.
+
+    Raises:
+        ServiceValidationError: If targeting is invalid.
+
+    """
+    return [ed["coordinator"] for ed in _resolve_entry_data_list(hass, call)]
 
 
 def _parse_timestamp(
@@ -265,8 +268,8 @@ def _resolve_cleanliness_machines(
 ) -> list[Any]:
     """Resolve targets to cleanliness state machines.
 
-    Supports targeting by calendar entity, sensor entity,
-    or config_entry_id.
+    Delegates to ``_resolve_entry_data_list`` and extracts
+    the cleanliness machine from each resolved entry.
 
     Args:
         hass: Home Assistant instance.
@@ -279,45 +282,7 @@ def _resolve_cleanliness_machines(
         ServiceValidationError: If targeting is invalid.
 
     """
-    entity_ids: list[str] = cv.ensure_list(
-        call.data.get("entity_id", []),
-    )
-    config_entry_id = call.data.get(ATTR_CONFIG_ENTRY_ID)
-
-    if entity_ids and config_entry_id:
-        msg = "Provide either an entity target or config_entry_id, not both"
-        raise ServiceValidationError(
-            msg,
-            translation_domain=DOMAIN,
-            translation_key="ambiguous_target",
-        )
-
-    if not entity_ids and not config_entry_id:
-        msg = "Provide either an entity target or config_entry_id"
-        raise ServiceValidationError(
-            msg,
-            translation_domain=DOMAIN,
-            translation_key="missing_target",
-        )
-
-    domain_data: dict[str, Any] = hass.data.get(DOMAIN, {})
-
-    if config_entry_id:
-        entry_data = domain_data.get(config_entry_id)
-        if entry_data is None:
-            msg = f"Config entry {config_entry_id} not found or not loaded"
-            raise ServiceValidationError(
-                msg,
-                translation_domain=DOMAIN,
-                translation_key="entry_not_found",
-            )
-        return [entry_data["cleanliness"]]
-
-    machines = []
-    for eid in entity_ids:
-        entry_data = _find_entry_data_by_entity(domain_data, eid)
-        machines.append(entry_data["cleanliness"])
-    return machines
+    return [ed["cleanliness"] for ed in _resolve_entry_data_list(hass, call)]
 
 
 async def _handle_mark_clean(call: ServiceCall) -> None:
@@ -353,63 +318,6 @@ async def _handle_mark_dirty(call: ServiceCall) -> None:
 
     for machine in machines:
         await machine.async_mark_dirty()
-
-
-def _resolve_entry_data_list(
-    hass: HomeAssistant,
-    call: ServiceCall,
-) -> list[dict[str, Any]]:
-    """Resolve targets to entry data dicts.
-
-    Supports targeting by calendar entity, sensor entity,
-    or config_entry_id.
-
-    Args:
-        hass: Home Assistant instance.
-        call: The service call with target and data.
-
-    Returns:
-        List of resolved entry data dictionaries.
-
-    Raises:
-        ServiceValidationError: If targeting is invalid.
-
-    """
-    entity_ids: list[str] = cv.ensure_list(
-        call.data.get("entity_id", []),
-    )
-    config_entry_id = call.data.get(ATTR_CONFIG_ENTRY_ID)
-
-    if entity_ids and config_entry_id:
-        msg = "Provide either an entity target or config_entry_id, not both"
-        raise ServiceValidationError(
-            msg,
-            translation_domain=DOMAIN,
-            translation_key="ambiguous_target",
-        )
-
-    if not entity_ids and not config_entry_id:
-        msg = "Provide either an entity target or config_entry_id"
-        raise ServiceValidationError(
-            msg,
-            translation_domain=DOMAIN,
-            translation_key="missing_target",
-        )
-
-    domain_data: dict[str, Any] = hass.data.get(DOMAIN, {})
-
-    if config_entry_id:
-        entry_data = domain_data.get(config_entry_id)
-        if entry_data is None:
-            msg = f"Config entry {config_entry_id} not found or not loaded"
-            raise ServiceValidationError(
-                msg,
-                translation_domain=DOMAIN,
-                translation_key="entry_not_found",
-            )
-        return [entry_data]
-
-    return [_find_entry_data_by_entity(domain_data, eid) for eid in entity_ids]
 
 
 async def _handle_remove_cleaning_event(

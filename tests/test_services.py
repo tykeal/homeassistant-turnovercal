@@ -15,6 +15,10 @@ import pytest
 import yaml
 from homeassistant.core import ServiceCall
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_registry as er
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+)
 
 from custom_components.turnovercal.const import DOMAIN
 from custom_components.turnovercal.models import TurnoverEvent
@@ -515,13 +519,25 @@ class TestHandleMarkClean:
         coord = _make_coordinator()
         mock_machine = MagicMock()
         mock_machine.async_mark_clean = AsyncMock()
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            entry_id=_ENTRY_ID,
+        )
+        entry.add_to_hass(hass)
         hass.data[DOMAIN] = {
             _ENTRY_ID: {
                 "coordinator": coord,
                 "cleanliness": mock_machine,
-                "sensor_entity_id": ("sensor.turnovercal_cleanliness"),
             },
         }
+        registry = er.async_get(hass)
+        registry.async_get_or_create(
+            domain="sensor",
+            platform=DOMAIN,
+            unique_id=f"{_ENTRY_ID}_cleanliness",
+            config_entry=entry,
+            suggested_object_id="turnovercal_cleanliness",
+        )
         call = _make_service_call(
             hass,
             target={
@@ -653,13 +669,25 @@ class TestHandleMarkDirty:
         coord = _make_coordinator()
         mock_machine = MagicMock()
         mock_machine.async_mark_dirty = AsyncMock()
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            entry_id=_ENTRY_ID,
+        )
+        entry.add_to_hass(hass)
         hass.data[DOMAIN] = {
             _ENTRY_ID: {
                 "coordinator": coord,
                 "cleanliness": mock_machine,
-                "sensor_entity_id": ("sensor.turnovercal_cleanliness"),
             },
         }
+        registry = er.async_get(hass)
+        registry.async_get_or_create(
+            domain="sensor",
+            platform=DOMAIN,
+            unique_id=f"{_ENTRY_ID}_cleanliness",
+            config_entry=entry,
+            suggested_object_id="turnovercal_cleanliness",
+        )
         call = _make_service_call(
             hass,
             target={
