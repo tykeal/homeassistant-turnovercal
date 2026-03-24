@@ -212,8 +212,24 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         for uid in list(cached.keys()):
             if uid not in new_events:
                 cached_evt = cached[uid]
+                _LOGGER.debug(
+                    "Evaluating cached event for removal: "
+                    "uid=%s summary=%s dtstart=%s dtend=%s",
+                    uid,
+                    cached_evt.summary,
+                    cached_evt.dtstart,
+                    cached_evt.dtend,
+                )
                 if self._should_preserve(cached_evt, now):
+                    _LOGGER.debug(
+                        "Preserving cached event uid=%s",
+                        uid,
+                    )
                     continue
+                _LOGGER.debug(
+                    "Removing stale cached event uid=%s",
+                    uid,
+                )
                 await self._cache.async_remove_event(uid)
 
         for evt in new_events.values():
@@ -246,13 +262,26 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             True if the event should be kept in cache.
 
         """
+        past = cached_evt.dtend <= now
+        _LOGGER.debug(
+            "Preserve check uid=%s: adjusted_by_lock=%s "
+            "midstay_cancellation=%s preserve=%s "
+            "past(dtend=%s <= now=%s)=%s",
+            cached_evt.uid,
+            cached_evt.adjusted_by_lock,
+            cached_evt.created_from_midstay_cancellation,
+            cached_evt.preserve,
+            cached_evt.dtend,
+            now,
+            past,
+        )
         if cached_evt.adjusted_by_lock:
             return True
         if cached_evt.created_from_midstay_cancellation:
             return True
         if cached_evt.preserve:
             return True
-        return cached_evt.dtend <= now
+        return past
 
     async def _async_detect_midstay_cancellations(
         self,

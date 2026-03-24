@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -17,6 +18,7 @@ from custom_components.turnovercal.models import CachedEventStore, TurnoverEvent
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
+_LOGGER = logging.getLogger(__name__)
 _STORAGE_VERSION = 1
 _SAVE_DELAY = 5
 
@@ -151,6 +153,27 @@ class EventCache:
         for uid in list(self._data.events.keys()):
             event = self._data.events[uid]
             if event.dtend < cutoff:
+                if (
+                    event.preserve
+                    or event.adjusted_by_lock
+                    or event.created_from_midstay_cancellation
+                ):
+                    _LOGGER.debug(
+                        "Skipping cleanup of protected event "
+                        "uid=%s: preserve=%s adjusted_by_lock=%s "
+                        "midstay_cancellation=%s",
+                        uid,
+                        event.preserve,
+                        event.adjusted_by_lock,
+                        event.created_from_midstay_cancellation,
+                    )
+                    continue
+                _LOGGER.debug(
+                    "Removing expired event uid=%s dtend=%s cutoff=%s",
+                    uid,
+                    event.dtend,
+                    cutoff,
+                )
                 del self._data.events[uid]
                 removed += 1
 
