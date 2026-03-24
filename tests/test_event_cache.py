@@ -290,3 +290,54 @@ class TestEventCacheCleanup:
         removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
 
         assert removed == 0
+
+    async def test_preserved_event_skipped(self, hass: HomeAssistant) -> None:
+        """Event past retention with preserve=True is kept."""
+        cache = EventCache(hass, "test_entry_id", _TEST_TOKEN)
+        evt = _make_event(
+            created_at=datetime(2026, 1, 25, 12, 0, tzinfo=UTC),
+            dtstart=datetime(2026, 1, 25, 11, 0, tzinfo=ET),
+            dtend=datetime(2026, 1, 25, 15, 0, tzinfo=ET),
+        )
+        evt.preserve = True
+        await cache.async_add_event(evt)
+
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
+
+        assert removed == 0
+        assert VALID_UID in cache.get_events()
+
+    async def test_lock_adjusted_event_skipped(self, hass: HomeAssistant) -> None:
+        """Event past retention with adjusted_by_lock=True is kept."""
+        cache = EventCache(hass, "test_entry_id", _TEST_TOKEN)
+        evt = _make_event(
+            created_at=datetime(2026, 1, 25, 12, 0, tzinfo=UTC),
+            dtstart=datetime(2026, 1, 25, 11, 0, tzinfo=ET),
+            dtend=datetime(2026, 1, 25, 15, 0, tzinfo=ET),
+        )
+        evt.adjusted_by_lock = True
+        await cache.async_add_event(evt)
+
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
+
+        assert removed == 0
+        assert VALID_UID in cache.get_events()
+
+    async def test_midstay_cancellation_event_skipped(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Event past retention with midstay cancellation flag is kept."""
+        cache = EventCache(hass, "test_entry_id", _TEST_TOKEN)
+        evt = _make_event(
+            created_at=datetime(2026, 1, 25, 12, 0, tzinfo=UTC),
+            dtstart=datetime(2026, 1, 25, 11, 0, tzinfo=ET),
+            dtend=datetime(2026, 1, 25, 15, 0, tzinfo=ET),
+        )
+        evt.created_from_midstay_cancellation = True
+        await cache.async_add_event(evt)
+
+        removed = await cache.async_cleanup_expired(retention_weeks=6, now=FIXED_NOW)
+
+        assert removed == 0
+        assert VALID_UID in cache.get_events()
