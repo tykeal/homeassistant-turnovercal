@@ -258,6 +258,7 @@ async def _async_reconcile_active_stay(  # noqa: C901
 
     tz = ZoneInfo(timezone_str)
 
+    calendar_has_active = False
     for event in rc_events:
         try:
             evt_start = _coerce_event_dt(event.start, tz)
@@ -273,6 +274,11 @@ async def _async_reconcile_active_stay(  # noqa: C901
             return
 
         if evt_start <= now < evt_end:
+            if state_machine.phase == PHASE_OCCUPIED:
+                # Already occupied; let the sensor check below
+                # decide whether the guest actually checked out.
+                calendar_has_active = True
+                break
             await state_machine.async_handle_checkin(evt_end)
             return
 
@@ -322,7 +328,7 @@ async def _async_reconcile_active_stay(  # noqa: C901
 
     # No active stay found; if state machine is occupied,
     # the booking ended or disappeared — trigger checkout.
-    if state_machine.phase == PHASE_OCCUPIED:
+    if state_machine.phase == PHASE_OCCUPIED and not calendar_has_active:
         _LOGGER.info(
             "Startup reconciliation: occupied state with no "
             "active RC booking; triggering checkout",
@@ -525,7 +531,7 @@ def _register_rc_sensor_listener(  # noqa: PLR0913
         new_val = new_state.state
         old_val = old_state.state if old_state else None
 
-        if new_val == RC_STATE_CHECKED_IN:
+        if new_val == RC_STATE_CHECKED_IN and old_val != RC_STATE_CHECKED_IN:
             checkout_time = await _async_extract_checkout_time(
                 new_state,
                 hass,

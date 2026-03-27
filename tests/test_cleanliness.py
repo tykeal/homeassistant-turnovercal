@@ -2581,7 +2581,10 @@ class TestStartupReconcileOrphanedOccupied:
                 machine,
                 "UTC",
             )
-            mock_checkin.assert_awaited_once_with(checkout)
+            # Occupied with active stay but no sensor: the
+            # calendar finding prevents the checkout fallback
+            # while the occupied state prevents a duplicate checkin.
+            mock_checkin.assert_not_awaited()
             mock_checkout.assert_not_awaited()
 
     @freeze_time("2026-06-10T14:00:00+00:00")
