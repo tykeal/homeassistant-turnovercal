@@ -1690,6 +1690,39 @@ class TestOrphanedOccupiedReconciliation:
         mock_cleanliness.async_handle_checkout.assert_awaited_once()
 
     @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_naive_datetime_event_skips_reconciliation(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Naive-datetime RC event aborts reconciliation."""
+        naive_event = MagicMock()
+        naive_event.start = datetime(2026, 3, 14, 10, 0)  # noqa: DTZ001
+        naive_event.end = datetime(2026, 3, 16, 10, 0)  # noqa: DTZ001
+
+        cache = _make_cache_mock()
+        coordinator = _make_coordinator_with_entry(
+            hass,
+            cache,
+            rc_events=[naive_event],
+        )
+
+        mock_cleanliness = MagicMock()
+        mock_cleanliness.phase = "occupied"
+        mock_cleanliness.async_handle_checkout = AsyncMock()
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["test_entry_123"] = {
+            "cleanliness": mock_cleanliness,
+        }
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        mock_cleanliness.async_handle_checkout.assert_not_awaited()
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
     async def test_no_config_entry_id_noop(
         self,
         hass: HomeAssistant,

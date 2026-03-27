@@ -2628,10 +2628,46 @@ class TestStartupReconcileOrphanedOccupied:
             mock_checkin.assert_not_awaited()
             mock_checkout.assert_not_awaited()
 
+    @freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_naive_datetime_event_skips_reconciliation(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Naive-datetime RC event aborts startup reconciliation."""
+        naive_event = MagicMock()
+        naive_event.start = datetime(2026, 6, 9, 10, 0)  # noqa: DTZ001
+        naive_event.end = datetime(2026, 6, 11, 10, 0)  # noqa: DTZ001
 
-# ---------------------------------------------------------------------------
-# _derive_rc_checkin_sensor_id
-# ---------------------------------------------------------------------------
+        calendar_entity = MagicMock()
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[naive_event],
+        )
+
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with patch.object(
+            machine,
+            "async_handle_checkout",
+            new_callable=AsyncMock,
+        ) as mock_checkout:
+            await _async_reconcile_active_stay(
+                hass,
+                coordinator,
+                machine,
+                "UTC",
+            )
+            mock_checkout.assert_not_awaited()
 
 
 class TestDeriveRcCheckinSensorId:

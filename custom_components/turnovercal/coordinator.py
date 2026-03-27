@@ -422,7 +422,13 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             if not isinstance(ev_start, datetime) or not isinstance(ev_end, datetime):
                 continue
             if ev_start.tzinfo is None or ev_end.tzinfo is None:
-                continue
+                _LOGGER.debug(
+                    "Skipping occupied-state reconciliation "
+                    "due to naive RC event start=%s end=%s",
+                    ev_start,
+                    ev_end,
+                )
+                return
             if ev_start <= now < ev_end:
                 return
 

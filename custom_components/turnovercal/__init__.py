@@ -227,11 +227,11 @@ async def _async_reconcile_active_stay(  # noqa: C901
 
         if evt_start.tzinfo is None or evt_end.tzinfo is None:
             _LOGGER.warning(
-                "Skipping RC event with naive datetime start=%s end=%s",
+                "Skipping startup reconciliation due to naive RC event start=%s end=%s",
                 evt_start,
                 evt_end,
             )
-            continue
+            return
 
         if evt_start <= now <= evt_end:
             await state_machine.async_handle_checkin(evt_end)
