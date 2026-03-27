@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -169,6 +169,43 @@ def _resolve_lock_monitoring(
     return enabled, lock_entity_id, slot, grace
 
 
+class _NaiveDatetimeError(Exception):
+    """Raised when a naive datetime is encountered."""
+
+
+def _coerce_event_dt(
+    value: date | datetime,
+    tz: ZoneInfo,
+) -> datetime:
+    """Normalize a CalendarEvent start/end to a tz-aware datetime.
+
+    Args:
+        value: Calendar event start or end (date or datetime).
+        tz: Target timezone for all-day (date) events.
+
+    Returns:
+        A tz-aware datetime.
+
+    Raises:
+        _NaiveDatetimeError: If *value* is a naive datetime.
+        TypeError: If *value* is neither ``date`` nor ``datetime``.
+
+    """
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            raise _NaiveDatetimeError
+        return value
+    if isinstance(value, date):
+        return datetime(
+            value.year,
+            value.month,
+            value.day,
+            tzinfo=tz,
+        )
+    msg = f"Expected date or datetime, got {type(value).__name__}"
+    raise TypeError(msg)
+
+
 async def _async_reconcile_active_stay(  # noqa: C901
     hass: HomeAssistant,
     coordinator: TurnoverCoordinator,
@@ -219,21 +256,23 @@ async def _async_reconcile_active_stay(  # noqa: C901
         )
         return
 
-    for event in rc_events:
-        evt_start = event.start
-        evt_end = event.end
-        if not (isinstance(evt_start, datetime) and isinstance(evt_end, datetime)):
-            continue
+    tz = ZoneInfo(timezone_str)
 
-        if evt_start.tzinfo is None or evt_end.tzinfo is None:
+    for event in rc_events:
+        try:
+            evt_start = _coerce_event_dt(event.start, tz)
+            evt_end = _coerce_event_dt(event.end, tz)
+        except TypeError:
+            continue
+        except _NaiveDatetimeError:
             _LOGGER.warning(
                 "Skipping startup reconciliation due to naive RC event start=%s end=%s",
-                evt_start,
-                evt_end,
+                event.start,
+                event.end,
             )
             return
 
-        if evt_start <= now <= evt_end:
+        if evt_start <= now < evt_end:
             await state_machine.async_handle_checkin(evt_end)
             return
 
@@ -466,11 +505,12 @@ def _register_rc_sensor_listener(  # noqa: PLR0913
     sensor_id = _derive_rc_checkin_sensor_id(calendar_entity_id)
 
     if hass.states.get(sensor_id) is None:
-        _LOGGER.warning(
-            "RC check-in sensor '%s' not found; falling back to bus events only",
+        _LOGGER.info(
+            "RC check-in sensor '%s' has no current state; "
+            "listener registered and will activate when "
+            "the entity becomes available",
             sensor_id,
         )
-        return False
 
     async def _handle_sensor_change(
         event: Event[EventStateChangedData],
@@ -573,6 +613,7 @@ async def _async_extract_checkout_time(
 
     # Fallback: query calendar for active booking
     now = datetime.now(tz=ZoneInfo(timezone_str))
+    tz = ZoneInfo(timezone_str)
     start = now - timedelta(days=1)
     end = now + timedelta(days=1)
     try:
@@ -585,15 +626,13 @@ async def _async_extract_checkout_time(
         return None
 
     for event in rc_events:
-        evt_start = event.start
-        evt_end = event.end
-        if (
-            isinstance(evt_start, datetime)
-            and isinstance(evt_end, datetime)
-            and evt_start.tzinfo is not None
-            and evt_end.tzinfo is not None
-            and evt_start <= now <= evt_end
-        ):
+        try:
+            evt_start = _coerce_event_dt(event.start, tz)
+            evt_end = _coerce_event_dt(event.end, tz)
+        except (TypeError, _NaiveDatetimeError):
+            continue
+
+        if evt_start <= now < evt_end:
             return evt_end
 
     return None

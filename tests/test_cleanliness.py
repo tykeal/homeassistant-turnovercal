@@ -2822,12 +2822,13 @@ class TestAsyncExtractCheckoutTime:
 class TestRegisterRcSensorListener:
     """Tests for _register_rc_sensor_listener."""
 
-    def test_sensor_not_found_returns_false(
+    def test_sensor_not_found_still_registers(
         self,
         hass: HomeAssistant,
     ) -> None:
-        """Returns False when sensor entity does not exist."""
+        """Registers listener even when sensor has no state."""
         entry = MagicMock()
+        entry.async_on_unload = MagicMock()
         state_machine = MagicMock()
         coordinator = MagicMock()
 
@@ -2839,7 +2840,8 @@ class TestRegisterRcSensorListener:
             coordinator,
             "UTC",
         )
-        assert result is False
+        assert result is True
+        entry.async_on_unload.assert_called_once()
 
     def test_sensor_found_returns_true(
         self,
