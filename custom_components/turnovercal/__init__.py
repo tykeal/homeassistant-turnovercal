@@ -14,7 +14,10 @@ from zoneinfo import ZoneInfo
 from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 
 from custom_components.turnovercal.cleanliness import CleanlinessStateMachine
 from custom_components.turnovercal.cleanliness_store import CleanlinessStateStore
@@ -44,6 +47,10 @@ from custom_components.turnovercal.const import (
     KEYMASTER_DOMAIN,
     KM_LOCK_ENTITY_KEY,
     PHASE_OCCUPIED,
+    RC_STATE_AWAITING_CHECKIN,
+    RC_STATE_CHECKED_IN,
+    RC_STATE_CHECKED_OUT,
+    RC_STATE_NO_RESERVATION,
 )
 from custom_components.turnovercal.coordinator import TurnoverCoordinator
 from custom_components.turnovercal.event_cache import EventCache
@@ -58,7 +65,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import Event, HomeAssistant
+    from homeassistant.core import Event, EventStateChangedData, HomeAssistant
     from homeassistant.helpers.entity_component import EntityComponent
 
 _LOGGER = logging.getLogger(__name__)
@@ -162,7 +169,7 @@ def _resolve_lock_monitoring(
     return enabled, lock_entity_id, slot, grace
 
 
-async def _async_reconcile_active_stay(
+async def _async_reconcile_active_stay(  # noqa: C901
     hass: HomeAssistant,
     coordinator: TurnoverCoordinator,
     state_machine: CleanlinessStateMachine,
@@ -175,9 +182,17 @@ async def _async_reconcile_active_stay(
     passed but check-out (end) has not, triggers
     ``async_handle_checkin`` to recover from missed events (FR-008).
 
-    If no active stay is found but the state machine is in the
-    ``occupied`` phase, triggers ``async_handle_checkout`` to
-    recover from missed checkout events.
+    After calendar-based checks, consults the RC check-in sensor:
+
+    - If sensor is ``checked_in`` and state is not occupied,
+      triggers checkin.
+    - If sensor is ``checked_out`` or ``no_reservation`` and
+      state is ``occupied``, triggers checkout.
+
+    If no active stay is found and no sensor overrides apply,
+    but the state machine is in the ``occupied`` phase, triggers
+    ``async_handle_checkout`` to recover from missed checkout
+    events.
 
     Args:
         hass: Home Assistant instance.
@@ -220,6 +235,50 @@ async def _async_reconcile_active_stay(
 
         if evt_start <= now <= evt_end:
             await state_machine.async_handle_checkin(evt_end)
+            return
+
+    # Check RC check-in sensor for additional reconciliation
+    sensor_id = _derive_rc_checkin_sensor_id(
+        coordinator.calendar_entity.entity_id,
+    )
+    sensor_state = hass.states.get(sensor_id)
+    if sensor_state is not None:
+        sensor_val = sensor_state.state
+        if sensor_val == RC_STATE_CHECKED_IN and state_machine.phase != PHASE_OCCUPIED:
+            checkout_time = await _async_extract_checkout_time(
+                sensor_state,
+                hass,
+                coordinator,
+                timezone_str,
+            )
+            if checkout_time is not None:
+                _LOGGER.info(
+                    "Startup reconciliation: RC sensor "
+                    "'%s' is checked_in; "
+                    "triggering checkin",
+                    sensor_id,
+                )
+                await state_machine.async_handle_checkin(
+                    checkout_time,
+                )
+                return
+
+        if (
+            sensor_val
+            in (
+                RC_STATE_CHECKED_OUT,
+                RC_STATE_NO_RESERVATION,
+            )
+            and state_machine.phase == PHASE_OCCUPIED
+        ):
+            _LOGGER.info(
+                "Startup reconciliation: RC sensor "
+                "'%s' is %s with occupied state; "
+                "triggering checkout",
+                sensor_id,
+                sensor_val,
+            )
+            await state_machine.async_handle_checkout()
             return
 
     # No active stay found; if state machine is occupied,
@@ -359,6 +418,185 @@ def _register_rc_listeners(
     )
     entry.async_on_unload(unsub_checkin)
     entry.async_on_unload(unsub_checkout)
+
+
+def _derive_rc_checkin_sensor_id(calendar_entity_id: str) -> str:
+    """Derive the RC check-in sensor entity ID from the calendar.
+
+    Args:
+        calendar_entity_id: The RC calendar entity ID
+            (e.g. ``calendar.rental_control_myplace``).
+
+    Returns:
+        The derived sensor entity ID
+        (e.g. ``sensor.rental_control_myplace_checkin``).
+
+    """
+    name = calendar_entity_id.removeprefix("calendar.")
+    return f"sensor.{name}_checkin"
+
+
+def _register_rc_sensor_listener(  # noqa: PLR0913
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    calendar_entity_id: str,
+    state_machine: CleanlinessStateMachine,
+    coordinator: TurnoverCoordinator,
+    timezone_str: str,
+) -> bool:
+    """Subscribe to the RC check-in sensor state changes.
+
+    Monitors the Rental Control check-in sensor as the primary
+    detection mechanism for guest check-in / check-out
+    transitions.  Falls back gracefully if the sensor entity
+    does not exist.
+
+    Args:
+        hass: Home Assistant instance.
+        entry: Config entry for unload tracking.
+        calendar_entity_id: The RC calendar entity ID.
+        state_machine: The cleanliness state machine.
+        coordinator: The turnover coordinator.
+        timezone_str: IANA timezone string for the property.
+
+    Returns:
+        True if the listener was registered, False otherwise.
+
+    """
+    sensor_id = _derive_rc_checkin_sensor_id(calendar_entity_id)
+
+    if hass.states.get(sensor_id) is None:
+        _LOGGER.warning(
+            "RC check-in sensor '%s' not found; falling back to bus events only",
+            sensor_id,
+        )
+        return False
+
+    async def _handle_sensor_change(
+        event: Event[EventStateChangedData],
+    ) -> None:
+        """Handle RC check-in sensor state changes."""
+        new_state = event.data.get("new_state")
+        old_state = event.data.get("old_state")
+
+        if new_state is None:
+            return
+
+        new_val = new_state.state
+        old_val = old_state.state if old_state else None
+
+        if new_val == RC_STATE_CHECKED_IN:
+            checkout_time = await _async_extract_checkout_time(
+                new_state,
+                hass,
+                coordinator,
+                timezone_str,
+            )
+            if checkout_time is not None:
+                _LOGGER.info(
+                    "RC sensor '%s': %s -> %s; triggering checkin",
+                    sensor_id,
+                    old_val,
+                    new_val,
+                )
+                await state_machine.async_handle_checkin(
+                    checkout_time,
+                )
+            else:
+                _LOGGER.warning(
+                    "RC sensor '%s': %s -> %s "
+                    "but no checkout_time available; "
+                    "skipping checkin",
+                    sensor_id,
+                    old_val,
+                    new_val,
+                )
+            return
+
+        if old_val == RC_STATE_CHECKED_IN and new_val in (
+            RC_STATE_CHECKED_OUT,
+            RC_STATE_NO_RESERVATION,
+            RC_STATE_AWAITING_CHECKIN,
+        ):
+            _LOGGER.info(
+                "RC sensor '%s': %s -> %s; triggering checkout",
+                sensor_id,
+                old_val,
+                new_val,
+            )
+            await state_machine.async_handle_checkout()
+
+    unsub = async_track_state_change_event(
+        hass,
+        sensor_id,
+        _handle_sensor_change,
+    )
+    entry.async_on_unload(unsub)
+
+    _LOGGER.debug(
+        "Registered RC check-in sensor listener for '%s'",
+        sensor_id,
+    )
+    return True
+
+
+async def _async_extract_checkout_time(
+    sensor_state: object,
+    hass: HomeAssistant,
+    coordinator: TurnoverCoordinator,
+    timezone_str: str,
+) -> datetime | None:
+    """Extract checkout_time from the RC sensor or calendar.
+
+    Tries the sensor's ``checkout_time`` attribute first, then
+    falls back to querying the RC calendar for an active booking.
+
+    Args:
+        sensor_state: The HA State object for the RC sensor.
+        hass: Home Assistant instance.
+        coordinator: The turnover coordinator.
+        timezone_str: IANA timezone string for the property.
+
+    Returns:
+        A timezone-aware checkout datetime, or None.
+
+    """
+    attrs = getattr(sensor_state, "attributes", {}) or {}
+    raw = attrs.get("checkout_time")
+    if raw is not None:
+        try:
+            checkout_dt = datetime.fromisoformat(raw) if isinstance(raw, str) else raw
+        except (ValueError, TypeError):
+            checkout_dt = None
+        if isinstance(checkout_dt, datetime) and checkout_dt.tzinfo is not None:
+            return checkout_dt
+
+    # Fallback: query calendar for active booking
+    now = datetime.now(tz=ZoneInfo(timezone_str))
+    start = now - timedelta(days=1)
+    end = now + timedelta(days=1)
+    try:
+        rc_events = await coordinator.calendar_entity.async_get_events(
+            hass,
+            start,
+            end,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+
+    for event in rc_events:
+        evt_start = event.start
+        evt_end = event.end
+        if (
+            isinstance(evt_start, datetime)
+            and isinstance(evt_end, datetime)
+            and evt_start.tzinfo is not None
+            and evt_end.tzinfo is not None
+            and evt_start <= now <= evt_end
+        ):
+            return evt_end
+
+    return None
 
 
 async def async_setup_entry(
@@ -501,8 +739,18 @@ async def async_setup_entry(
         )
         entry.async_on_unload(unsub_lock)
 
-    # Register RC check-in / check-out event listeners
+    # Register RC check-in / check-out event listeners (fallback)
     _register_rc_listeners(hass, entry, entity_id, state_machine)
+
+    # Register RC check-in sensor listener (primary detection)
+    _register_rc_sensor_listener(
+        hass,
+        entry,
+        entity_id,
+        state_machine,
+        coordinator,
+        tz_str,
+    )
 
     async def _async_hourly_cleanup(_now: datetime) -> None:
         """Run hourly cleanup of expired events."""
