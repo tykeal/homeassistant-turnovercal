@@ -518,19 +518,34 @@ class CleanlinessStateMachine:
         self._fire_callbacks()
         return created_uid
 
-    async def async_handle_lock_code(self) -> None:
+    async def async_handle_lock_code(
+        self,
+        now: datetime | None = None,
+    ) -> None:
         """Handle a cleaning lock code entry.
 
         When in ``awaiting_cleaning`` phase, transitions to
         ``being_cleaned``, starts the cleaning duration timer,
         and persists the state.  No-op for any other phase.
+
+        Args:
+            now: Optional effective timestamp (UTC).
+                 Defaults to the current time.
+
         """
         assert self._state is not None  # noqa: S101
 
         if self._state.phase != PHASE_AWAITING_CLEANING:
             return
 
-        now = datetime.now(tz=_UTC)
+        if now is None:
+            now = datetime.now(tz=_UTC)
+        else:
+            if now.tzinfo is None:
+                msg = "now must be a timezone-aware datetime"
+                raise ValueError(msg)
+            if now.tzinfo is not _UTC:
+                now = now.astimezone(_UTC)
         timer_target = now + timedelta(
             hours=self._cleaning_duration_hours,
         )

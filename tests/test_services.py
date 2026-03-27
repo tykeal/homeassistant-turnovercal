@@ -203,7 +203,14 @@ class TestHandleMarkCleaning:
     ) -> None:
         """Service call triggers apply_cleaning_signal."""
         coord = _make_coordinator()
-        hass.data[DOMAIN] = {_ENTRY_ID: {"coordinator": coord}}
+        mock_machine = MagicMock()
+        mock_machine.async_handle_lock_code = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
         call = _make_service_call(
             hass,
             data={ATTR_CONFIG_ENTRY_ID: _ENTRY_ID},
@@ -213,13 +220,83 @@ class TestHandleMarkCleaning:
         args = coord.apply_cleaning_signal.call_args
         assert args.kwargs.get("source") == "service_call"
 
+    async def test_transitions_cleanliness_state(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Service passes parsed timestamp to state machine."""
+        coord = _make_coordinator()
+        mock_machine = MagicMock()
+        mock_machine.async_handle_lock_code = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
+        call = _make_service_call(
+            hass,
+            data={ATTR_CONFIG_ENTRY_ID: _ENTRY_ID},
+        )
+        await _handle_mark_cleaning(call)
+        mock_machine.async_handle_lock_code.assert_awaited_once()
+        ts = mock_machine.async_handle_lock_code.call_args[0][0]
+        coord_ts = coord.apply_cleaning_signal.call_args[0][0]
+        assert isinstance(ts, datetime)
+        assert ts == coord_ts
+        assert ts.tzinfo is not None
+
+    async def test_sensor_entity_targeting(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Service call via sensor entity resolves correctly."""
+        coord = _make_coordinator()
+        mock_machine = MagicMock()
+        mock_machine.async_handle_lock_code = AsyncMock()
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            entry_id=_ENTRY_ID,
+        )
+        entry.add_to_hass(hass)
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
+        registry = er.async_get(hass)
+        registry.async_get_or_create(
+            domain="sensor",
+            platform=DOMAIN,
+            unique_id=f"{_ENTRY_ID}_cleanliness",
+            config_entry=entry,
+            suggested_object_id="turnovercal_cleanliness",
+        )
+        call = _make_service_call(
+            hass,
+            target={
+                "entity_id": "sensor.turnovercal_cleanliness",
+            },
+        )
+        await _handle_mark_cleaning(call)
+        coord.apply_cleaning_signal.assert_awaited_once()
+        mock_machine.async_handle_lock_code.assert_awaited_once()
+
     async def test_timestamp_override(
         self,
         hass: HomeAssistant,
     ) -> None:
         """Timestamp override is interpreted in HA timezone."""
         coord = _make_coordinator()
-        hass.data[DOMAIN] = {_ENTRY_ID: {"coordinator": coord}}
+        mock_machine = MagicMock()
+        mock_machine.async_handle_lock_code = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
         hass.config.time_zone = "America/New_York"
         call = _make_service_call(
             hass,
@@ -242,7 +319,14 @@ class TestHandleMarkCleaning:
     ) -> None:
         """Datetime object timestamp override works."""
         coord = _make_coordinator()
-        hass.data[DOMAIN] = {_ENTRY_ID: {"coordinator": coord}}
+        mock_machine = MagicMock()
+        mock_machine.async_handle_lock_code = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
         hass.config.time_zone = "America/New_York"
         ts = datetime(2026, 3, 15, 10, 30, 0)  # noqa: DTZ001
         call = _make_service_call(
@@ -262,7 +346,14 @@ class TestHandleMarkCleaning:
     ) -> None:
         """Default timestamp is current UTC time."""
         coord = _make_coordinator()
-        hass.data[DOMAIN] = {_ENTRY_ID: {"coordinator": coord}}
+        mock_machine = MagicMock()
+        mock_machine.async_handle_lock_code = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
         call = _make_service_call(
             hass,
             data={ATTR_CONFIG_ENTRY_ID: _ENTRY_ID},
@@ -279,7 +370,14 @@ class TestHandleMarkCleaning:
     ) -> None:
         """Aware datetime is converted without reinterpretation."""
         coord = _make_coordinator()
-        hass.data[DOMAIN] = {_ENTRY_ID: {"coordinator": coord}}
+        mock_machine = MagicMock()
+        mock_machine.async_handle_lock_code = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
         hass.config.time_zone = "America/New_York"
         # 10:30 PDT (March = daylight saving) = 17:30 UTC
         pdt = ZoneInfo("America/Los_Angeles")
@@ -306,7 +404,14 @@ class TestHandleMarkCleaning:
         coord.apply_cleaning_signal = AsyncMock(
             return_value=False,
         )
-        hass.data[DOMAIN] = {_ENTRY_ID: {"coordinator": coord}}
+        mock_machine = MagicMock()
+        mock_machine.async_handle_lock_code = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
         call = _make_service_call(
             hass,
             data={ATTR_CONFIG_ENTRY_ID: _ENTRY_ID},
@@ -323,7 +428,14 @@ class TestHandleMarkCleaning:
     ) -> None:
         """Successful adjustment notifies subscribers."""
         coord = _make_coordinator()
-        hass.data[DOMAIN] = {_ENTRY_ID: {"coordinator": coord}}
+        mock_machine = MagicMock()
+        mock_machine.async_handle_lock_code = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
         call = _make_service_call(
             hass,
             data={ATTR_CONFIG_ENTRY_ID: _ENTRY_ID},
@@ -340,7 +452,14 @@ class TestHandleMarkCleaning:
         coord.apply_cleaning_signal = AsyncMock(
             side_effect=[True, False],
         )
-        hass.data[DOMAIN] = {_ENTRY_ID: {"coordinator": coord}}
+        mock_machine = MagicMock()
+        mock_machine.async_handle_lock_code = AsyncMock()
+        hass.data[DOMAIN] = {
+            _ENTRY_ID: {
+                "coordinator": coord,
+                "cleanliness": mock_machine,
+            },
+        }
         call = _make_service_call(
             hass,
             data={ATTR_CONFIG_ENTRY_ID: _ENTRY_ID},
@@ -427,8 +546,11 @@ class TestServiceContract:
         """Target matches contract: entity integration."""
         svc = self._load_yaml()["mark_cleaning_started"]
         target = svc["target"]
-        assert target["entity"]["integration"] == "turnovercal"
-        assert target["entity"]["domain"] == "calendar"
+        entity = target["entity"]
+        assert entity["integration"] == "turnovercal"
+        domain = entity["domain"]
+        assert "calendar" in domain
+        assert "sensor" in domain
 
     def test_service_schema_fields(self) -> None:
         """Fields match contract specification."""
