@@ -10,7 +10,9 @@ mark_cleaning_started:
   target:
     entity:
       integration: turnovercal
-      domain: calendar
+      domain:
+        - calendar
+        - sensor
   fields:
     config_entry_id:
       name: Config entry ID

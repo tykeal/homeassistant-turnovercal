@@ -231,18 +231,20 @@ def _parse_timestamp(
 async def _handle_mark_cleaning(call: ServiceCall) -> None:
     """Handle the mark_cleaning_started service call.
 
-    Resolves all target coordinators, parses the optional
-    timestamp, and applies the cleaning signal to each.
+    Resolves all target entries, parses the optional timestamp,
+    applies the cleaning signal to each coordinator, and
+    transitions the cleanliness state machine.
 
     Args:
         call: The service call.
 
     """
     hass = call.hass
-    coordinators = _resolve_coordinators(hass, call)
+    entries = _resolve_entry_data_list(hass, call)
     now = _parse_timestamp(hass, call.data.get(ATTR_TIMESTAMP))
 
-    for coordinator in coordinators:
+    for entry_data in entries:
+        coordinator: TurnoverCoordinator = entry_data["coordinator"]
         adjusted = await coordinator.apply_cleaning_signal(
             now,
             source="service_call",
@@ -253,9 +255,12 @@ async def _handle_mark_cleaning(call: ServiceCall) -> None:
             )
         else:
             _LOGGER.warning(
-                "No active turnover window for %s",
+                "Cleaning signal had no effect for %s",
                 coordinator.calendar_entity_id,
             )
+
+        machine = entry_data["cleanliness"]
+        await machine.async_handle_lock_code(now)
 
 
 def _resolve_cleanliness_machines(
