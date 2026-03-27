@@ -46,6 +46,42 @@ def _as_datetime(value: date | datetime, tz: ZoneInfo) -> datetime:
     raise TypeError(msg)
 
 
+class NaiveDatetimeError(Exception):
+    """Raised when a naive datetime is encountered during coercion."""
+
+
+def coerce_event_dt(
+    value: date | datetime,
+    tz: ZoneInfo,
+) -> datetime:
+    """Normalize a CalendarEvent start/end to a tz-aware datetime.
+
+    Unlike ``_as_datetime``, this raises ``NaiveDatetimeError``
+    for naive datetimes so callers can distinguish the failure
+    mode and choose to skip or abort.
+
+    Args:
+        value: Calendar event start or end (date or datetime).
+        tz: Target timezone for all-day (date) events.
+
+    Returns:
+        A tz-aware datetime.
+
+    Raises:
+        NaiveDatetimeError: If *value* is a naive datetime.
+        TypeError: If *value* is neither ``date`` nor ``datetime``.
+
+    """
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            raise NaiveDatetimeError
+        return value
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day, tzinfo=tz)
+    msg = f"Expected date or datetime, got {type(value).__name__}"
+    raise TypeError(msg)
+
+
 def generate_uid(checkout_id: str, checkin_id: str) -> str:
     """Generate a deterministic UID from checkout and checkin event IDs.
 

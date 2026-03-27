@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -59,6 +59,10 @@ from custom_components.turnovercal.models import TurnoverEvent
 from custom_components.turnovercal.services import (
     async_setup_services,
     async_unload_services,
+)
+from custom_components.turnovercal.turnover import (
+    NaiveDatetimeError,
+    coerce_event_dt,
 )
 
 if TYPE_CHECKING:
@@ -169,43 +173,6 @@ def _resolve_lock_monitoring(
     return enabled, lock_entity_id, slot, grace
 
 
-class _NaiveDatetimeError(Exception):
-    """Raised when a naive datetime is encountered."""
-
-
-def _coerce_event_dt(
-    value: date | datetime,
-    tz: ZoneInfo,
-) -> datetime:
-    """Normalize a CalendarEvent start/end to a tz-aware datetime.
-
-    Args:
-        value: Calendar event start or end (date or datetime).
-        tz: Target timezone for all-day (date) events.
-
-    Returns:
-        A tz-aware datetime.
-
-    Raises:
-        _NaiveDatetimeError: If *value* is a naive datetime.
-        TypeError: If *value* is neither ``date`` nor ``datetime``.
-
-    """
-    if isinstance(value, datetime):
-        if value.tzinfo is None:
-            raise _NaiveDatetimeError
-        return value
-    if isinstance(value, date):
-        return datetime(
-            value.year,
-            value.month,
-            value.day,
-            tzinfo=tz,
-        )
-    msg = f"Expected date or datetime, got {type(value).__name__}"
-    raise TypeError(msg)
-
-
 async def _async_reconcile_active_stay(  # noqa: C901
     hass: HomeAssistant,
     coordinator: TurnoverCoordinator,
@@ -261,11 +228,11 @@ async def _async_reconcile_active_stay(  # noqa: C901
     calendar_has_active = False
     for event in rc_events:
         try:
-            evt_start = _coerce_event_dt(event.start, tz)
-            evt_end = _coerce_event_dt(event.end, tz)
+            evt_start = coerce_event_dt(event.start, tz)
+            evt_end = coerce_event_dt(event.end, tz)
         except TypeError:
             continue
-        except _NaiveDatetimeError:
+        except NaiveDatetimeError:
             _LOGGER.warning(
                 "Skipping startup reconciliation due to naive RC event start=%s end=%s",
                 event.start,
@@ -313,6 +280,7 @@ async def _async_reconcile_active_stay(  # noqa: C901
             in (
                 RC_STATE_CHECKED_OUT,
                 RC_STATE_NO_RESERVATION,
+                RC_STATE_AWAITING_CHECKIN,
             )
             and state_machine.phase == PHASE_OCCUPIED
         ):
@@ -633,9 +601,9 @@ async def _async_extract_checkout_time(
 
     for event in rc_events:
         try:
-            evt_start = _coerce_event_dt(event.start, tz)
-            evt_end = _coerce_event_dt(event.end, tz)
-        except (TypeError, _NaiveDatetimeError):
+            evt_start = coerce_event_dt(event.start, tz)
+            evt_end = coerce_event_dt(event.end, tz)
+        except (TypeError, NaiveDatetimeError):
             continue
 
         if evt_start <= now < evt_end:

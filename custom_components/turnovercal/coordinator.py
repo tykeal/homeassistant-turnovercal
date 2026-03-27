@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Protocol
 from zoneinfo import ZoneInfo
 
@@ -18,7 +18,11 @@ from custom_components.turnovercal.const import (
     PHASE_OCCUPIED,
 )
 from custom_components.turnovercal.models import TurnoverEvent
-from custom_components.turnovercal.turnover import compute_turnover_events
+from custom_components.turnovercal.turnover import (
+    NaiveDatetimeError,
+    coerce_event_dt,
+    compute_turnover_events,
+)
 
 if TYPE_CHECKING:
     from typing import Any
@@ -60,43 +64,6 @@ def _event_changed(old: TurnoverEvent, new: TurnoverEvent) -> bool:
         or old.status != new.status
         or old.is_trailing != new.is_trailing
     )
-
-
-class _NaiveDatetimeError(Exception):
-    """Raised when a naive datetime is encountered."""
-
-
-def _coerce_event_dt(
-    value: date | datetime,
-    tz: ZoneInfo,
-) -> datetime:
-    """Normalize a CalendarEvent start/end to a tz-aware datetime.
-
-    Args:
-        value: Calendar event start or end (date or datetime).
-        tz: Target timezone for all-day (date) events.
-
-    Returns:
-        A tz-aware datetime.
-
-    Raises:
-        _NaiveDatetimeError: If *value* is a naive datetime.
-        TypeError: If *value* is neither ``date`` nor ``datetime``.
-
-    """
-    if isinstance(value, datetime):
-        if value.tzinfo is None:
-            raise _NaiveDatetimeError
-        return value
-    if isinstance(value, date):
-        return datetime(
-            value.year,
-            value.month,
-            value.day,
-            tzinfo=tz,
-        )
-    msg = f"Expected date or datetime, got {type(value).__name__}"
-    raise TypeError(msg)
 
 
 class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
@@ -457,11 +424,11 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
 
         for ev in rc_events:
             try:
-                ev_start = _coerce_event_dt(ev.start, tz)
-                ev_end = _coerce_event_dt(ev.end, tz)
+                ev_start = coerce_event_dt(ev.start, tz)
+                ev_end = coerce_event_dt(ev.end, tz)
             except TypeError:
                 continue
-            except _NaiveDatetimeError:
+            except NaiveDatetimeError:
                 _LOGGER.debug(
                     "Skipping occupied-state reconciliation "
                     "due to naive RC event start=%s end=%s",
