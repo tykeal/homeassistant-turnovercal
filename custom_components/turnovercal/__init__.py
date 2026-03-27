@@ -473,7 +473,7 @@ def _register_rc_sensor_listener(  # noqa: PLR0913
         timezone_str: IANA timezone string for the property.
 
     Returns:
-        True if the listener was registered, False otherwise.
+        Always True; the listener is registered unconditionally.
 
     """
     sensor_id = _derive_rc_checkin_sensor_id(calendar_entity_id)

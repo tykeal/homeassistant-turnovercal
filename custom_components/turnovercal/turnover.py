@@ -75,7 +75,7 @@ def coerce_event_dt(
     if isinstance(value, datetime):
         if value.tzinfo is None:
             raise NaiveDatetimeError
-        return value
+        return value.astimezone(tz)
     if isinstance(value, date):
         return datetime(value.year, value.month, value.day, tzinfo=tz)
     msg = f"Expected date or datetime, got {type(value).__name__}"
