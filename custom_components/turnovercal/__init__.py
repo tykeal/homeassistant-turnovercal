@@ -43,6 +43,7 @@ from custom_components.turnovercal.const import (
     EVENT_RC_CHECKOUT,
     KEYMASTER_DOMAIN,
     KM_LOCK_ENTITY_KEY,
+    PHASE_OCCUPIED,
 )
 from custom_components.turnovercal.coordinator import TurnoverCoordinator
 from custom_components.turnovercal.event_cache import EventCache
@@ -167,12 +168,16 @@ async def _async_reconcile_active_stay(
     state_machine: CleanlinessStateMachine,
     timezone_str: str,
 ) -> None:
-    """Detect an active guest stay and trigger check-in if needed.
+    """Detect an active guest stay and reconcile cleanliness state.
 
     Queries the RC calendar entity for events spanning the current
     time.  If a guest stay is found where check-in (start) has
     passed but check-out (end) has not, triggers
     ``async_handle_checkin`` to recover from missed events (FR-008).
+
+    If no active stay is found but the state machine is in the
+    ``occupied`` phase, triggers ``async_handle_checkout`` to
+    recover from missed checkout events.
 
     Args:
         hass: Home Assistant instance.
@@ -216,6 +221,15 @@ async def _async_reconcile_active_stay(
         if evt_start <= now <= evt_end:
             await state_machine.async_handle_checkin(evt_end)
             return
+
+    # No active stay found; if state machine is occupied,
+    # the booking ended or disappeared — trigger checkout.
+    if state_machine.phase == PHASE_OCCUPIED:
+        _LOGGER.info(
+            "Startup reconciliation: occupied state with no "
+            "active RC booking; triggering checkout",
+        )
+        await state_machine.async_handle_checkout()
 
 
 def _build_coverage_delegates(  # noqa: PLR0913
