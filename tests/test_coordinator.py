@@ -1545,3 +1545,201 @@ class TestPreserveFallbackCleaningEvents:
         cache.async_remove_event.assert_called_once_with(
             regular_event.uid,
         )
+
+
+# ---------------------------------------------------------------------------
+# Orphaned occupied state reconciliation
+# ---------------------------------------------------------------------------
+
+
+class TestOrphanedOccupiedReconciliation:
+    """Tests for occupied state reconciliation in update cycle."""
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_occupied_no_active_booking_triggers_checkout(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Occupied with no active RC booking triggers checkout."""
+        cache = _make_cache_mock()
+        coordinator = _make_coordinator_with_entry(
+            hass,
+            cache,
+            rc_events=[],
+        )
+
+        mock_cleanliness = MagicMock()
+        mock_cleanliness.phase = "occupied"
+        mock_cleanliness.async_handle_checkout = AsyncMock()
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["test_entry_123"] = {
+            "cleanliness": mock_cleanliness,
+        }
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        mock_cleanliness.async_handle_checkout.assert_awaited_once()
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_occupied_active_booking_no_checkout(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Occupied with active RC booking does not trigger checkout."""
+        now = datetime(2026, 3, 15, 14, 0, tzinfo=ET)
+        active_event = CalendarEvent(
+            start=now - timedelta(hours=4),
+            end=now + timedelta(hours=20),
+            summary="Guest A",
+            uid="rc-stay-001",
+        )
+
+        cache = _make_cache_mock()
+        coordinator = _make_coordinator_with_entry(
+            hass,
+            cache,
+            rc_events=[active_event],
+        )
+
+        mock_cleanliness = MagicMock()
+        mock_cleanliness.phase = "occupied"
+        mock_cleanliness.async_handle_checkout = AsyncMock()
+        mock_cleanliness.async_handle_midstay_cancellation = AsyncMock()
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["test_entry_123"] = {
+            "cleanliness": mock_cleanliness,
+        }
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        mock_cleanliness.async_handle_checkout.assert_not_awaited()
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_clean_state_no_active_booking_noop(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Clean state with no active booking is a no-op."""
+        cache = _make_cache_mock()
+        coordinator = _make_coordinator_with_entry(
+            hass,
+            cache,
+            rc_events=[],
+        )
+
+        mock_cleanliness = MagicMock()
+        mock_cleanliness.phase = "clean"
+        mock_cleanliness.async_handle_checkout = AsyncMock()
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["test_entry_123"] = {
+            "cleanliness": mock_cleanliness,
+        }
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        mock_cleanliness.async_handle_checkout.assert_not_awaited()
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_occupied_past_booking_triggers_checkout(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Occupied with only past RC booking triggers checkout."""
+        now = datetime(2026, 3, 15, 14, 0, tzinfo=ET)
+        past_event = CalendarEvent(
+            start=now - timedelta(days=3),
+            end=now - timedelta(days=1),
+            summary="Old Guest",
+            uid="rc-stay-old",
+        )
+
+        cache = _make_cache_mock()
+        coordinator = _make_coordinator_with_entry(
+            hass,
+            cache,
+            rc_events=[past_event],
+        )
+
+        mock_cleanliness = MagicMock()
+        mock_cleanliness.phase = "occupied"
+        mock_cleanliness.async_handle_checkout = AsyncMock()
+        mock_cleanliness.async_handle_midstay_cancellation = AsyncMock()
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["test_entry_123"] = {
+            "cleanliness": mock_cleanliness,
+        }
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        mock_cleanliness.async_handle_checkout.assert_awaited_once()
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_naive_datetime_event_skips_reconciliation(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Naive-datetime RC event aborts reconciliation."""
+        naive_event = MagicMock()
+        naive_event.start = datetime(2026, 3, 14, 10, 0)  # noqa: DTZ001
+        naive_event.end = datetime(2026, 3, 16, 10, 0)  # noqa: DTZ001
+
+        cache = _make_cache_mock()
+        coordinator = _make_coordinator_with_entry(
+            hass,
+            cache,
+            rc_events=[naive_event],
+        )
+
+        mock_cleanliness = MagicMock()
+        mock_cleanliness.phase = "occupied"
+        mock_cleanliness.async_handle_checkout = AsyncMock()
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["test_entry_123"] = {
+            "cleanliness": mock_cleanliness,
+        }
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        mock_cleanliness.async_handle_checkout.assert_not_awaited()
+
+    @freeze_time("2026-03-15T14:00:00-04:00")
+    async def test_no_config_entry_id_noop(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """No config entry ID skips reconciliation."""
+        cache = _make_cache_mock()
+        coordinator = _make_coordinator(hass, cache)
+
+        mock_cleanliness = MagicMock()
+        mock_cleanliness.phase = "occupied"
+        mock_cleanliness.async_handle_checkout = AsyncMock()
+        hass.data.setdefault(DOMAIN, {})
+
+        with patch(
+            "custom_components.turnovercal.coordinator.compute_turnover_events",
+            return_value=[],
+        ):
+            await coordinator._async_update_data()  # noqa: SLF001
+
+        mock_cleanliness.async_handle_checkout.assert_not_awaited()

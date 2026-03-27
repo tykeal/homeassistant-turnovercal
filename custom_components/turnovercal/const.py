@@ -77,5 +77,11 @@ REASON_DISPLAY: dict[str, str] = {
     REASON_STARTUP_RECONCILIATION: "Startup reconciliation",
 }
 
+# RC check-in sensor states
+RC_STATE_NO_RESERVATION = "no_reservation"
+RC_STATE_AWAITING_CHECKIN = "awaiting_checkin"
+RC_STATE_CHECKED_IN = "checked_in"
+RC_STATE_CHECKED_OUT = "checked_out"
+
 # Cleanliness store
 CLEANLINESS_STORE_VERSION = 1

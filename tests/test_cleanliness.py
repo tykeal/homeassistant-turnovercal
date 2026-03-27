@@ -13,7 +13,12 @@ from zoneinfo import ZoneInfo
 import pytest
 from freezegun import freeze_time
 
-from custom_components.turnovercal import _async_reconcile_active_stay
+from custom_components.turnovercal import (
+    _async_extract_checkout_time,
+    _async_reconcile_active_stay,
+    _derive_rc_checkin_sensor_id,
+    _register_rc_sensor_listener,
+)
 from custom_components.turnovercal.cleanliness import (
     CleanlinessState,
     CleanlinessStateMachine,
@@ -26,6 +31,10 @@ from custom_components.turnovercal.const import (
     PHASE_BEING_CLEANED,
     PHASE_CLEAN,
     PHASE_OCCUPIED,
+    RC_STATE_AWAITING_CHECKIN,
+    RC_STATE_CHECKED_IN,
+    RC_STATE_CHECKED_OUT,
+    RC_STATE_NO_RESERVATION,
     REASON_CLEANING_DURATION_ELAPSED,
     REASON_GUEST_CHECKIN,
     REASON_GUEST_CHECKOUT,
@@ -2472,3 +2481,782 @@ class TestAsyncMarkDirty:
 
         assert machine.is_dirty is True
         assert machine.phase == PHASE_AWAITING_CLEANING
+
+
+# ---------------------------------------------------------------------------
+# Startup reconciliation: orphaned occupied state
+# ---------------------------------------------------------------------------
+
+
+class TestStartupReconcileOrphanedOccupied:
+    """Tests for startup checkout reconciliation."""
+
+    @freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_occupied_no_active_stay_triggers_checkout(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Occupied with no active booking at startup triggers checkout."""
+        past_event = MagicMock()
+        past_event.start = datetime(2026, 6, 8, 10, 0, tzinfo=UTC)
+        past_event.end = datetime(2026, 6, 9, 11, 0, tzinfo=UTC)
+
+        calendar_entity = MagicMock()
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[past_event],
+        )
+
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with patch.object(
+            machine,
+            "async_handle_checkout",
+            new_callable=AsyncMock,
+        ) as mock_checkout:
+            await _async_reconcile_active_stay(
+                hass,
+                coordinator,
+                machine,
+                "UTC",
+            )
+            mock_checkout.assert_awaited_once()
+
+    @freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_occupied_active_stay_triggers_checkin_not_checkout(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Occupied with active booking triggers checkin, not checkout."""
+        now = datetime(2026, 6, 10, 14, 0, tzinfo=UTC)
+        checkout = now + timedelta(hours=20)
+
+        active_event = MagicMock()
+        active_event.start = now - timedelta(hours=3)
+        active_event.end = checkout
+
+        calendar_entity = MagicMock()
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[active_event],
+        )
+
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with (
+            patch.object(
+                machine,
+                "async_handle_checkin",
+                new_callable=AsyncMock,
+            ) as mock_checkin,
+            patch.object(
+                machine,
+                "async_handle_checkout",
+                new_callable=AsyncMock,
+            ) as mock_checkout,
+        ):
+            await _async_reconcile_active_stay(
+                hass,
+                coordinator,
+                machine,
+                "UTC",
+            )
+            # Occupied with active stay but no sensor: the
+            # calendar finding prevents the checkout fallback
+            # while the occupied state prevents a duplicate checkin.
+            mock_checkin.assert_not_awaited()
+            mock_checkout.assert_not_awaited()
+
+    @freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_clean_state_no_active_stay_noop(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Clean state with no active booking is a no-op."""
+        calendar_entity = MagicMock()
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[],
+        )
+
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with (
+            patch.object(
+                machine,
+                "async_handle_checkin",
+                new_callable=AsyncMock,
+            ) as mock_checkin,
+            patch.object(
+                machine,
+                "async_handle_checkout",
+                new_callable=AsyncMock,
+            ) as mock_checkout,
+        ):
+            await _async_reconcile_active_stay(
+                hass,
+                coordinator,
+                machine,
+                "UTC",
+            )
+            mock_checkin.assert_not_awaited()
+            mock_checkout.assert_not_awaited()
+
+    @freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_naive_datetime_event_skips_reconciliation(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Naive-datetime RC event aborts startup reconciliation."""
+        naive_event = MagicMock()
+        naive_event.start = datetime(2026, 6, 9, 10, 0)  # noqa: DTZ001
+        naive_event.end = datetime(2026, 6, 11, 10, 0)  # noqa: DTZ001
+
+        calendar_entity = MagicMock()
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[naive_event],
+        )
+
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with patch.object(
+            machine,
+            "async_handle_checkout",
+            new_callable=AsyncMock,
+        ) as mock_checkout:
+            await _async_reconcile_active_stay(
+                hass,
+                coordinator,
+                machine,
+                "UTC",
+            )
+            mock_checkout.assert_not_awaited()
+
+
+class TestDeriveRcCheckinSensorId:
+    """Tests for _derive_rc_checkin_sensor_id helper."""
+
+    def test_standard_calendar_entity(self) -> None:
+        """Standard calendar entity derives correct sensor ID."""
+        result = _derive_rc_checkin_sensor_id(
+            "calendar.rental_control_myplace",
+        )
+        assert result == "sensor.rental_control_myplace_checkin"
+
+    def test_simple_calendar_entity(self) -> None:
+        """Simple calendar name derives correct sensor ID."""
+        result = _derive_rc_checkin_sensor_id(
+            "calendar.rental_control",
+        )
+        assert result == "sensor.rental_control_checkin"
+
+
+# ---------------------------------------------------------------------------
+# _async_extract_checkout_time
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncExtractCheckoutTime:
+    """Tests for _async_extract_checkout_time helper."""
+
+    async def test_checkout_time_from_sensor_attribute(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Extracts checkout_time from sensor attributes."""
+        checkout = datetime(2026, 6, 15, 11, 0, tzinfo=UTC)
+        sensor_state = MagicMock()
+        sensor_state.attributes = {
+            "checkout_time": checkout.isoformat(),
+        }
+        coordinator = MagicMock()
+
+        result = await _async_extract_checkout_time(
+            sensor_state,
+            hass,
+            coordinator,
+            "UTC",
+        )
+        assert result == checkout
+
+    async def test_checkout_time_as_datetime_object(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Handles checkout_time as datetime object."""
+        checkout = datetime(2026, 6, 15, 11, 0, tzinfo=UTC)
+        sensor_state = MagicMock()
+        sensor_state.attributes = {"checkout_time": checkout}
+        coordinator = MagicMock()
+
+        result = await _async_extract_checkout_time(
+            sensor_state,
+            hass,
+            coordinator,
+            "UTC",
+        )
+        assert result == checkout
+
+    @freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_fallback_to_calendar(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Falls back to calendar when sensor has no checkout_time."""
+        now = datetime(2026, 6, 10, 14, 0, tzinfo=UTC)
+        checkout = now + timedelta(hours=20)
+
+        active_event = MagicMock()
+        active_event.start = now - timedelta(hours=3)
+        active_event.end = checkout
+
+        sensor_state = MagicMock()
+        sensor_state.attributes = {}
+
+        calendar_entity = MagicMock()
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[active_event],
+        )
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        result = await _async_extract_checkout_time(
+            sensor_state,
+            hass,
+            coordinator,
+            "UTC",
+        )
+        assert result == checkout
+
+    async def test_malformed_checkout_time_string(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Returns None for malformed checkout_time string."""
+        sensor_state = MagicMock()
+        sensor_state.attributes = {"checkout_time": "not-a-date"}
+
+        calendar_entity = MagicMock()
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[],
+        )
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        result = await _async_extract_checkout_time(
+            sensor_state,
+            hass,
+            coordinator,
+            "UTC",
+        )
+        assert result is None
+
+    async def test_naive_checkout_time_ignored(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Naive datetime checkout_time is ignored."""
+        sensor_state = MagicMock()
+        sensor_state.attributes = {
+            "checkout_time": datetime(2026, 6, 15, 11, 0),  # noqa: DTZ001
+        }
+
+        calendar_entity = MagicMock()
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[],
+        )
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        result = await _async_extract_checkout_time(
+            sensor_state,
+            hass,
+            coordinator,
+            "UTC",
+        )
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _register_rc_sensor_listener
+# ---------------------------------------------------------------------------
+
+
+class TestRegisterRcSensorListener:
+    """Tests for _register_rc_sensor_listener."""
+
+    def test_sensor_not_found_still_registers(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Registers listener even when sensor has no state."""
+        entry = MagicMock()
+        entry.async_on_unload = MagicMock()
+        state_machine = MagicMock()
+        coordinator = MagicMock()
+
+        result = _register_rc_sensor_listener(
+            hass,
+            entry,
+            "calendar.rental_control",
+            state_machine,
+            coordinator,
+            "UTC",
+        )
+        assert result is True
+        entry.async_on_unload.assert_called_once()
+
+    def test_sensor_found_returns_true(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Returns True when sensor entity exists."""
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_NO_RESERVATION,
+        )
+
+        entry = MagicMock()
+        entry.async_on_unload = MagicMock()
+        state_machine = MagicMock()
+        coordinator = MagicMock()
+
+        result = _register_rc_sensor_listener(
+            hass,
+            entry,
+            "calendar.rental_control",
+            state_machine,
+            coordinator,
+            "UTC",
+        )
+        assert result is True
+        entry.async_on_unload.assert_called_once()
+
+    async def test_checked_in_triggers_checkin(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Sensor changing to checked_in triggers checkin."""
+        checkout = datetime(2026, 6, 15, 11, 0, tzinfo=UTC)
+
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_NO_RESERVATION,
+        )
+
+        entry = MagicMock()
+        entry.async_on_unload = MagicMock()
+        state_machine = MagicMock()
+        state_machine.async_handle_checkin = AsyncMock()
+        coordinator = MagicMock()
+
+        _register_rc_sensor_listener(
+            hass,
+            entry,
+            "calendar.rental_control",
+            state_machine,
+            coordinator,
+            "UTC",
+        )
+
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_CHECKED_IN,
+            {"checkout_time": checkout.isoformat()},
+        )
+        await hass.async_block_till_done()
+
+        state_machine.async_handle_checkin.assert_awaited_once_with(
+            checkout,
+        )
+
+    async def test_checked_in_to_checked_out_triggers_checkout(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Checked_in to checked_out triggers checkout."""
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_CHECKED_IN,
+            {"checkout_time": "2026-06-15T11:00:00+00:00"},
+        )
+
+        entry = MagicMock()
+        entry.async_on_unload = MagicMock()
+        state_machine = MagicMock()
+        state_machine.async_handle_checkout = AsyncMock()
+        coordinator = MagicMock()
+
+        _register_rc_sensor_listener(
+            hass,
+            entry,
+            "calendar.rental_control",
+            state_machine,
+            coordinator,
+            "UTC",
+        )
+
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_CHECKED_OUT,
+        )
+        await hass.async_block_till_done()
+
+        state_machine.async_handle_checkout.assert_awaited_once()
+
+    async def test_checked_in_to_no_reservation_triggers_checkout(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Checked_in to no_reservation triggers checkout."""
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_CHECKED_IN,
+        )
+
+        entry = MagicMock()
+        entry.async_on_unload = MagicMock()
+        state_machine = MagicMock()
+        state_machine.async_handle_checkout = AsyncMock()
+        coordinator = MagicMock()
+
+        _register_rc_sensor_listener(
+            hass,
+            entry,
+            "calendar.rental_control",
+            state_machine,
+            coordinator,
+            "UTC",
+        )
+
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_NO_RESERVATION,
+        )
+        await hass.async_block_till_done()
+
+        state_machine.async_handle_checkout.assert_awaited_once()
+
+    async def test_checked_in_to_awaiting_checkin_triggers_checkout(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Checked_in to awaiting_checkin triggers checkout."""
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_CHECKED_IN,
+        )
+
+        entry = MagicMock()
+        entry.async_on_unload = MagicMock()
+        state_machine = MagicMock()
+        state_machine.async_handle_checkout = AsyncMock()
+        coordinator = MagicMock()
+
+        _register_rc_sensor_listener(
+            hass,
+            entry,
+            "calendar.rental_control",
+            state_machine,
+            coordinator,
+            "UTC",
+        )
+
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_AWAITING_CHECKIN,
+        )
+        await hass.async_block_till_done()
+
+        state_machine.async_handle_checkout.assert_awaited_once()
+
+    async def test_checked_out_to_no_reservation_no_action(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Checked_out to no_reservation is a no-op."""
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_CHECKED_OUT,
+        )
+
+        entry = MagicMock()
+        entry.async_on_unload = MagicMock()
+        state_machine = MagicMock()
+        state_machine.async_handle_checkin = AsyncMock()
+        state_machine.async_handle_checkout = AsyncMock()
+        coordinator = MagicMock()
+
+        _register_rc_sensor_listener(
+            hass,
+            entry,
+            "calendar.rental_control",
+            state_machine,
+            coordinator,
+            "UTC",
+        )
+
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_NO_RESERVATION,
+        )
+        await hass.async_block_till_done()
+
+        state_machine.async_handle_checkin.assert_not_awaited()
+        state_machine.async_handle_checkout.assert_not_awaited()
+
+    async def test_no_checkout_time_skips_checkin(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Checked_in with no checkout_time skips checkin."""
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_NO_RESERVATION,
+        )
+
+        entry = MagicMock()
+        entry.async_on_unload = MagicMock()
+        state_machine = MagicMock()
+        state_machine.async_handle_checkin = AsyncMock()
+        coordinator = MagicMock()
+        coordinator.calendar_entity = MagicMock()
+        coordinator.calendar_entity.async_get_events = AsyncMock(
+            return_value=[],
+        )
+
+        _register_rc_sensor_listener(
+            hass,
+            entry,
+            "calendar.rental_control",
+            state_machine,
+            coordinator,
+            "UTC",
+        )
+
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_CHECKED_IN,
+        )
+        await hass.async_block_till_done()
+
+        state_machine.async_handle_checkin.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Startup reconciliation with RC sensor
+# ---------------------------------------------------------------------------
+
+
+class TestStartupReconcileWithRcSensor:
+    """Tests for RC sensor-based startup reconciliation."""
+
+    @freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_sensor_checked_in_triggers_checkin(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """RC sensor checked_in with clean state triggers checkin."""
+        checkout = datetime(2026, 6, 11, 11, 0, tzinfo=UTC)
+
+        calendar_entity = MagicMock()
+        calendar_entity.entity_id = "calendar.rental_control"
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[],
+        )
+
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_CHECKED_IN,
+            {"checkout_time": checkout.isoformat()},
+        )
+
+        store = _make_mock_store(persisted_state=None)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with patch.object(
+            machine,
+            "async_handle_checkin",
+            new_callable=AsyncMock,
+        ) as mock_checkin:
+            await _async_reconcile_active_stay(
+                hass,
+                coordinator,
+                machine,
+                "UTC",
+            )
+            mock_checkin.assert_awaited_once_with(checkout)
+
+    @freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_sensor_checked_out_occupied_triggers_checkout(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """RC sensor checked_out with occupied triggers checkout."""
+        calendar_entity = MagicMock()
+        calendar_entity.entity_id = "calendar.rental_control"
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[],
+        )
+
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_CHECKED_OUT,
+        )
+
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with patch.object(
+            machine,
+            "async_handle_checkout",
+            new_callable=AsyncMock,
+        ) as mock_checkout:
+            await _async_reconcile_active_stay(
+                hass,
+                coordinator,
+                machine,
+                "UTC",
+            )
+            mock_checkout.assert_awaited_once()
+
+    @freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_sensor_no_reservation_occupied_triggers_checkout(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """RC sensor no_reservation with occupied triggers checkout."""
+        calendar_entity = MagicMock()
+        calendar_entity.entity_id = "calendar.rental_control"
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[],
+        )
+
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        hass.states.async_set(
+            "sensor.rental_control_checkin",
+            RC_STATE_NO_RESERVATION,
+        )
+
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with patch.object(
+            machine,
+            "async_handle_checkout",
+            new_callable=AsyncMock,
+        ) as mock_checkout:
+            await _async_reconcile_active_stay(
+                hass,
+                coordinator,
+                machine,
+                "UTC",
+            )
+            mock_checkout.assert_awaited_once()
+
+    @freeze_time("2026-06-10T14:00:00+00:00")
+    async def test_sensor_not_present_falls_through(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Missing RC sensor falls through to calendar logic."""
+        calendar_entity = MagicMock()
+        calendar_entity.entity_id = "calendar.rental_control"
+        calendar_entity.async_get_events = AsyncMock(
+            return_value=[],
+        )
+
+        coordinator = MagicMock()
+        coordinator.calendar_entity = calendar_entity
+
+        persisted = _make_dirty_state(phase=PHASE_OCCUPIED)
+        store = _make_mock_store(persisted_state=persisted)
+        machine = CleanlinessStateMachine(
+            hass=hass,
+            entry_id=_TEST_ENTRY_ID,
+            store=store,
+            cleaning_duration_hours=3.0,
+        )
+        await machine.async_initialize()
+
+        with patch.object(
+            machine,
+            "async_handle_checkout",
+            new_callable=AsyncMock,
+        ) as mock_checkout:
+            await _async_reconcile_active_stay(
+                hass,
+                coordinator,
+                machine,
+                "UTC",
+            )
+            # Falls through to the final occupied check
+            mock_checkout.assert_awaited_once()

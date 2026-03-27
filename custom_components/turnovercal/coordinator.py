@@ -15,9 +15,14 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from custom_components.turnovercal.const import (
     DEFAULT_EARLY_UNLOCK_GRACE_HOURS,
     DOMAIN,
+    PHASE_OCCUPIED,
 )
 from custom_components.turnovercal.models import TurnoverEvent
-from custom_components.turnovercal.turnover import compute_turnover_events
+from custom_components.turnovercal.turnover import (
+    NaiveDatetimeError,
+    coerce_event_dt,
+    compute_turnover_events,
+)
 
 if TYPE_CHECKING:
     from typing import Any
@@ -168,6 +173,18 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
         except Exception:  # noqa: BLE001
             _LOGGER.warning(
                 "Mid-stay cancellation detection failed; "
+                "continuing with turnover computation",
+                exc_info=True,
+            )
+
+        try:
+            await self._async_reconcile_occupied_state(
+                rc_events,
+                now,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.warning(
+                "Occupied state reconciliation failed; "
                 "continuing with turnover computation",
                 exc_info=True,
             )
@@ -374,6 +391,60 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             if ev_start <= now <= ev_end:
                 current_active[uid] = (ev_start, ev_end)
         return current_active, present_uids, naive_uids
+
+    async def _async_reconcile_occupied_state(
+        self,
+        rc_events: list[CalendarEvent],
+        now: datetime,
+    ) -> None:
+        """Reconcile occupied state when no active booking exists.
+
+        If the cleanliness state machine is in ``occupied`` phase
+        but no RC booking spans the current time, triggers a
+        checkout transition to prevent the sensor getting stuck.
+
+        Args:
+            rc_events: Raw RC calendar events from the current poll.
+            now: Current local time.
+
+        """
+        if self._config_entry_id is None:
+            return
+
+        domain_data = self.hass.data.get(DOMAIN, {})
+        entry_data = domain_data.get(self._config_entry_id, {})
+        cleanliness = entry_data.get("cleanliness")
+        if cleanliness is None:
+            return
+
+        if cleanliness.phase != PHASE_OCCUPIED:
+            return
+
+        tz = ZoneInfo(self._timezone_str)
+
+        for ev in rc_events:
+            try:
+                ev_start = coerce_event_dt(ev.start, tz)
+                ev_end = coerce_event_dt(ev.end, tz)
+            except TypeError:
+                continue
+            except NaiveDatetimeError:
+                _LOGGER.debug(
+                    "Skipping occupied-state reconciliation "
+                    "due to naive RC event start=%s end=%s",
+                    ev.start,
+                    ev.end,
+                )
+                return
+
+            if ev_start <= now < ev_end:
+                return
+
+        _LOGGER.info(
+            "Occupied state with no active RC booking; "
+            "triggering checkout reconciliation",
+        )
+        await cleanliness.async_handle_checkout()
 
     async def _async_fire_midstay_cancellation(
         self,
