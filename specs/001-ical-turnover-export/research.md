@@ -66,14 +66,14 @@ staff unlocks during turnover windows:
 ```python
 # Example keypad unlock event payload:
 {
-    "notification_source": "event",      # or "status_sync"
+    "notification_source": "event",  # or "status_sync"
     "lockname": "Front Door",
     "entity_id": "lock.front_door",
-    "state": "unlocked",                 # or "locked"
-    "action_code": 6,                    # Z-Wave alarm code
+    "state": "unlocked",  # or "locked"
+    "action_code": 6,  # Z-Wave alarm code
     "action_text": "Keypad Unlock Code Slot 1",
-    "code_slot_num": 1,                  # which code slot
-    "code_slot_name": "John Doe",        # slot label
+    "code_slot_num": 1,  # which code slot
+    "code_slot_name": "John Doe",  # slot label
 }
 ```
 
@@ -98,8 +98,8 @@ determined by Z-Wave alarm codes mapped through `LockMethod` enum:
 <!-- markdownlint-disable MD013 -->
 
 ```python
-
 EVENT_KEYMASTER = "keymaster_lock_state_changed"
+
 
 @callback
 def _handle_lock_event(event: Event) -> None:
@@ -117,7 +117,10 @@ def _handle_lock_event(event: Event) -> None:
     # This is a cleaning staff unlock — trigger adjustment
     _apply_cleaning_signal(now=dt_util.utcnow())
 
-unsub = hass.bus.async_listen(EVENT_KEYMASTER, _handle_lock_event)  # codespell:ignore hass
+
+unsub = hass.bus.async_listen(
+    EVENT_KEYMASTER, _handle_lock_event
+)  # codespell:ignore hass
 entry.async_on_unload(unsub)
 ```
 
