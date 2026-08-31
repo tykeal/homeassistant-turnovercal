@@ -216,7 +216,7 @@ async def _async_reconcile_active_stay(  # noqa: C901
             start,
             end,
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         _LOGGER.warning(
             "RC calendar unavailable during startup reconciliation",
             exc_info=True,
