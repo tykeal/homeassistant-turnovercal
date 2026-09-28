@@ -158,7 +158,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
             rc_events = await self._calendar_entity.async_get_events(
                 self.hass, start, end
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.warning(
                 "Rental Control calendar unavailable; serving cached data",
                 exc_info=True,
@@ -170,7 +170,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
                 rc_events,
                 now,
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.warning(
                 "Mid-stay cancellation detection failed; "
                 "continuing with turnover computation",
@@ -182,7 +182,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
                 rc_events,
                 now,
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.warning(
                 "Occupied state reconciliation failed; "
                 "continuing with turnover computation",
@@ -197,7 +197,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
                 trailing_duration_hours=self._trailing_duration_hours,
                 timezone_str=self._timezone_str,
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.warning(
                 "Turnover computation failed; serving cached data",
                 exc_info=True,
@@ -336,7 +336,7 @@ class TurnoverCoordinator(DataUpdateCoordinator[dict[str, TurnoverEvent]]):
                         await self._async_fire_midstay_cancellation(
                             start,
                         )
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         _LOGGER.warning(
                             "Failed to fire mid-stay cancellation for UID %s…",
                             uid[:8],

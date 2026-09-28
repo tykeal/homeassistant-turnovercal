@@ -427,7 +427,7 @@ class CleanlinessStateMachine:
 
         try:
             await self._validate_cleaning_coverage(checkout_time)
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.warning(
                 "Failed to validate cleaning coverage after "
                 "check-in; continuing with occupied state",
@@ -626,7 +626,7 @@ class CleanlinessStateMachine:
             try:
                 if self._fallback_creator is not None:
                     await self._fallback_creator(now)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.warning(
                     "Failed to create cleaning event after "
                     "mark_dirty; property is still marked dirty",
@@ -646,7 +646,7 @@ class CleanlinessStateMachine:
         ref_time = checkout if checkout is not None else now
         try:
             await self._ensure_cleaning_event(ref_time)
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.warning(
                 "Failed to create cleaning event after "
                 "mark_dirty; property is still marked dirty",
